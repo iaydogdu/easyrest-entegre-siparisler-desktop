@@ -41,8 +41,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "YOUR_GITHUB_USERNAME",
-      "repo": "easyrest-entegre-siparisler"
+      "owner": "iaydogdu",
+      "repo": "easyrest-entegre-siparisler-desktop"
     },
     "nsis": {
       "oneClick": false,
