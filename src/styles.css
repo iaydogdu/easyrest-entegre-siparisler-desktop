@@ -1,6 +1,4 @@
-@import 'tailwindcss/base';
-@import 'tailwindcss/components';
-@import 'tailwindcss/utilities';
+/* Tailwind CSS yerine basit CSS */
 
 * {
   box-sizing: border-box;
