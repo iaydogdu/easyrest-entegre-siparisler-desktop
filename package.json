@@ -1,0 +1,82 @@
+{
+  "name": "easyrest-entegre-siparisler",
+  "version": "1.0.0",
+  "description": "EasyRest Entegre Siparişler Desktop Uygulaması",
+  "main": "dist/main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "ng serve",
+    "build": "ng build",
+    "build:electron": "ng build --configuration production && npm run electron:build",
+    "electron": "npm run build:electron && electron .",
+    "electron:dev": "concurrently \"ng serve\" \"wait-on http://localhost:4200 && electron .\"",
+    "electron:build": "tsc main.ts --outDir dist",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "release": "electron-builder --publish=always",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.easyrest.entegre-siparisler",
+    "productName": "EasyRest Entegre Siparişler",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "src/assets/icons/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Office"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "YOUR_GITHUB_USERNAME",
+      "repo": "easyrest-entegre-siparisler"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "@angular/animations": "^17.0.0",
+    "@angular/common": "^17.0.0",
+    "@angular/compiler": "^17.0.0",
+    "@angular/core": "^17.0.0",
+    "@angular/forms": "^17.0.0",
+    "@angular/platform-browser": "^17.0.0",
+    "@angular/platform-browser-dynamic": "^17.0.0",
+    "@angular/router": "^17.0.0",
+    "@angular/cdk": "^17.0.0",
+    "@angular/material": "^17.0.0",
+    "@ng-select/ng-select": "^15.0.0",
+    "@ngx-translate/core": "^15.0.0",
+    "@ngx-translate/http-loader": "^8.0.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.14.0",
+    "electron-updater": "^6.1.7"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^17.0.0",
+    "@angular/cli": "^17.0.0",
+    "@angular/compiler-cli": "^17.0.0",
+    "@types/node": "^18.18.0",
+    "concurrently": "^8.2.2",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "typescript": "~5.2.0",
+    "wait-on": "^7.2.0"
+  }
+}
