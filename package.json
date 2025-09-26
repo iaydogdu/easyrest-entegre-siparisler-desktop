@@ -1,6 +1,6 @@
 {
   "name": "easyrest-entegre-siparisler",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "EasyRest Entegre Siparişler Desktop Uygulaması",
   "author": "EasyRest",
   "main": "build/electron.js",
