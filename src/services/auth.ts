@@ -133,4 +133,8 @@ export class AuthService {
   static getUsername(): string {
     return localStorage.getItem('kullaniciAdi') || 'Kullanıcı';
   }
+
+  static getToken(): string | null {
+    return localStorage.getItem('token');
+  }
 }

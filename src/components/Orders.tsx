@@ -19,6 +19,8 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [autoApproveEnabled, setAutoApproveEnabled] = useState(false);
   const [newOrders, setNewOrders] = useState<Set<string>>(new Set());
+  const [approvedOrders, setApprovedOrders] = useState<Set<string>>(new Set());
+  const [isAutoApproving, setIsAutoApproving] = useState(false);
 
   // Summary hesaplama
   const summary = {
@@ -55,7 +57,16 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
   useEffect(() => {
     if (selectedStore) {
       loadOrders();
+      
+      // Ana Angular projeden: Background sync sistemlerini başlat
+      console.log('🚀 Background sync sistemleri başlatılıyor...', selectedStore);
+      OrderService.startBackgroundSyncs(selectedStore);
     }
+    
+    // Cleanup function - component unmount olduğunda sync'leri durdur
+    return () => {
+      OrderService.stopBackgroundSyncs();
+    };
   }, [selectedStore]);
 
   // Auto refresh every 10 seconds
@@ -117,7 +128,23 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
 
         const previousOrderIds = new Set(orders.map(o => OrderService.getOrderId(o)));
         
-        setOrders(response.data.orders);
+        // Siparişleri sırala: Yeni siparişler üstte, sonra tarihe göre
+        const sortedOrders = response.data.orders.sort((a, b) => {
+          // 1. Öncelik: Yeni siparişler en üstte
+          const isNewA = OrderService.isOrderReceived(a);
+          const isNewB = OrderService.isOrderReceived(b);
+
+          if (isNewA && !isNewB) return -1;
+          if (!isNewA && isNewB) return 1;
+
+          // 2. Tarih sıralaması (yeni olan üstte)
+          const dateA = new Date(a.createdAt).getTime();
+          const dateB = new Date(b.createdAt).getTime();
+
+          return dateB - dateA;
+        });
+
+        setOrders(sortedOrders);
         
         // Check for new orders
         const currentOrderIds = new Set(response.data.orders.map(o => OrderService.getOrderId(o)));
@@ -188,16 +215,120 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     return store ? store.magazaAdi : 'Mağaza Seçin';
   };
 
-  // Sound system
+  // Ana Angular projeden: Gelişmiş ses sistemi
+  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [soundInterval, setSoundInterval] = useState<NodeJS.Timeout | null>(null);
+
+  // Ses sistemi initialization
+  useEffect(() => {
+    const initializeAudio = async () => {
+      try {
+        console.log('🔊 Ses sistemi başlatılıyor...');
+        const audioElement = new Audio('/assets/sounds/web.mp3');
+        audioElement.volume = 0.7;
+        audioElement.preload = 'auto';
+        
+        audioElement.addEventListener('canplaythrough', () => {
+          console.log('✅ Ses dosyası yüklendi: /assets/sounds/web.mp3');
+          setAudio(audioElement);
+        });
+        
+        audioElement.addEventListener('error', (error) => {
+          console.error('❌ Ses dosyası hatası:', error);
+        });
+        
+        audioElement.load();
+      } catch (error) {
+        console.error('❌ Ses sistemi başlatma hatası:', error);
+      }
+    };
+
+    initializeAudio();
+  }, []);
+
   const playSound = () => {
+    if (!soundEnabled || !audio || isPlaying) return;
+
     try {
-      const audio = new Audio('/assets/sounds/web.mp3');
-      audio.volume = 0.7;
-      audio.play().catch(console.error);
+      console.log('🔊 Ses çalınıyor...');
+      setIsPlaying(true);
+      audio.currentTime = 0;
+      
+      audio.play().then(() => {
+        console.log('✅ Ses başarıyla çalındı');
+      }).catch(error => {
+        console.error('❌ Ses çalma hatası:', error);
+        setIsPlaying(false);
+      });
+
+      // Ses bittiğinde flag'i sıfırla
+      audio.addEventListener('ended', () => {
+        setIsPlaying(false);
+      }, { once: true });
+
     } catch (error) {
-      console.error('Ses çalma hatası:', error);
+      console.error('❌ Ses çalma hatası:', error);
+      setIsPlaying(false);
     }
   };
+
+  const startSoundLoop = () => {
+    if (soundInterval) return;
+
+    console.log('🔄 Ses loop başlatılıyor...');
+    
+    const interval = setInterval(() => {
+      if (soundEnabled && !autoApproveEnabled) {
+        // Onaylanmamış sipariş var mı kontrol et
+        const hasUnconfirmedOrders = filteredOrders.some(order => isNewOrder(order));
+        
+        if (hasUnconfirmedOrders) {
+          playSound();
+        } else {
+          stopSoundLoop();
+        }
+      } else {
+        stopSoundLoop();
+      }
+    }, 5000); // 5 saniyede bir tekrarla
+
+    setSoundInterval(interval);
+  };
+
+  const stopSoundLoop = () => {
+    if (soundInterval) {
+      console.log('🔇 Ses loop durduruluyor...');
+      clearInterval(soundInterval);
+      setSoundInterval(null);
+    }
+  };
+
+  // Yeni sipariş geldiğinde ses çal
+  useEffect(() => {
+    const hasNewOrders = filteredOrders.some(order => isNewOrder(order));
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔊 Ses kontrolü:', {
+        hasNewOrders,
+        soundEnabled,
+        audioReady: !!audio,
+        newOrderCount: filteredOrders.filter(order => isNewOrder(order)).length
+      });
+    }
+    
+    if (hasNewOrders && soundEnabled && audio) {
+      console.log('🆕 Yeni sipariş tespit edildi, ses çalınıyor...');
+      playSound();
+      
+      // Otomatik onay kapalıysa loop başlat
+      if (!autoApproveEnabled) {
+        startSoundLoop();
+      }
+    } else {
+      stopSoundLoop();
+    }
+  }, [filteredOrders, soundEnabled, autoApproveEnabled, audio]);
 
   const toggleSound = () => {
     const newSoundState = !soundEnabled;
@@ -219,6 +350,524 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
       loadOrders();
       setSelectedOrder(null);
     }
+  };
+
+  // Ana Angular projeden: Tam termal yazdırma sistemi
+  const printToThermalPrinter = async (order: Order) => {
+    if (!order) return;
+
+    const orderId = OrderService.getOrderId(order);
+    console.log(`🖨️ Termal yazdırma başlatılıyor: ${orderId} (${order.type})`);
+
+    // Ana Angular projeden: Platform-specific debug
+    if (order.type === 'YEMEKSEPETI') {
+      console.log('YemekSepeti siparişi termal yazdırma:');
+      console.log('Sipariş rawData:', order.rawData);
+      console.log('Sipariş ürünleri:', order.rawData.products);
+    } else if (order.type === 'MIGROS') {
+      console.log('Migros siparişi termal yazdırma:');
+      console.log('Sipariş rawData:', order.rawData);
+      console.log('Sipariş ürünleri:', OrderService.getProducts(order));
+      
+      // Adres bilgileri kontrolü
+      const addressInfo = OrderService.getDeliveryAddress(order);
+      console.log('Müşteri adres bilgileri:', addressInfo);
+      
+      // Müşteri ve teslim bilgileri
+      console.log('Müşteri adı:', OrderService.getCustomerName(order));
+      console.log('Müşteri telefonu:', OrderService.getCustomerPhone(order));
+      console.log('Teslimat tipi:', OrderService.getOrderType(order));
+    } else if (order.type === 'GETIR') {
+      console.log('Getir siparişi termal yazdırma:');
+      console.log('Sipariş rawData:', order.rawData);
+      
+      // Ürün detaylarını kontrol et
+      const products = OrderService.getProducts(order);
+      console.log('Ürünler:', products);
+      
+      // Ürün seçimlerinde çıkarılacak malzemeleri kontrol et
+      products.forEach(product => {
+        if (product.options) {
+          console.log(`"${OrderService.getProductName(product)}" için ürün seçimleri:`, product.options);
+          
+          product.options.forEach((category: any) => {
+            if (category.options) {
+              category.options.forEach((option: any) => {
+                if (option.optionCategories) {
+                  console.log(`"${option.name?.tr || ''}" için alt kategoriler:`, option.optionCategories);
+                }
+              });
+            }
+          });
+        }
+      });
+    } else if (order.type === 'TRENDYOL') {
+      console.log('Trendyol siparişi termal yazdırma:');
+      console.log('Sipariş rawData:', order.rawData);
+      console.log('Sipariş lines:', order.rawData.lines);
+    }
+
+    try {
+      // Ana Angular projeden: Tam HTML içeriği oluştur
+      const htmlContent = generateThermalHTML(order);
+      
+      // Yazdırma içeriğini kontrol et
+      console.log('Termal yazdırma içeriği:', htmlContent);
+      
+      // Ana Angular projeden: Doğru termal yazıcı endpoint
+      const response = await fetch('http://localhost:41411/api/receipt/print', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/html;charset=UTF-8',
+        },
+        body: htmlContent
+      });
+
+      if (response.ok) {
+        const responseText = await response.text();
+        console.log('✅ Termal yazıcı başarılı yanıt:', responseText);
+        console.log(`🖨️ Termal yazdırma tamamlandı: ${orderId}`);
+      } else {
+        throw new Error(`Printer API error: ${response.status}`);
+      }
+    } catch (error) {
+      console.error(`❌ Termal yazdırma hatası: ${orderId}`, error);
+      console.log(`🚫 Yazdırma başarısız: ${orderId} - ${error}`);
+    }
+  };
+
+  // Ana Angular projeden: Hesap fişi yazdırma (Adisyon)
+  const printAccountReceipt = async (order: Order) => {
+    if (!order) {
+      console.error('❌ printAccountReceipt: Sipariş null');
+      return;
+    }
+
+    const orderId = OrderService.getOrderId(order);
+    console.log(`📋 Hesap fişi yazdırma başlatılıyor: ${orderId} (${order.type})`);
+
+    try {
+      // Ana Angular projeden: Platform-specific order ID alma
+      let platformOrderId = '';
+      
+      switch (order.type) {
+        case 'YEMEKSEPETI':
+          platformOrderId = order.rawData.code;
+          break;
+        case 'TRENDYOL':
+          platformOrderId = order.rawData.orderNumber;
+          break;
+        case 'MIGROS':
+          platformOrderId = order.rawData.orderId?.toString();
+          break;
+        case 'GETIR':
+          platformOrderId = order.rawData.orderId?.toString() || order.rawData.confirmationId;
+          break;
+        default:
+          console.error(`❌ Bilinmeyen platform için hesap fişi: ${order.type}`);
+          return;
+      }
+
+      if (!platformOrderId) {
+        console.error(`❌ Platform order ID bulunamadı: ${orderId}`);
+        console.log(`🚫 Hesap fişi başarısız: ${orderId} - Platform ID yok`);
+        return;
+      }
+
+      console.log(`📋 Platform order ID: ${platformOrderId}`);
+
+      // Ana Angular projeden: 1. Backend'den local order ID'yi al
+      const getOrderResponse = await fetch('https://api.easycorest.com:5555/api/banko/getOrderById', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          orderId: platformOrderId,
+          type: order.type
+        })
+      });
+
+      if (!getOrderResponse.ok) {
+        throw new Error(`getOrderById API error: ${getOrderResponse.status}`);
+      }
+
+      const orderData = await getOrderResponse.json();
+      const localOrderId = orderData?.id || orderData?.newOrderId || orderData?.orderId;
+      
+      if (!localOrderId) {
+        console.error(`❌ Local order ID bulunamadı: ${orderId}`, orderData);
+        console.log(`🚫 Hesap fişi başarısız: ${orderId} - Local ID yok`);
+        return;
+      }
+
+      console.log(`📋 Local order ID: ${localOrderId}`);
+
+      // Ana Angular projeden: 2. Hesap fişi HTML'ini al
+      console.log(`📄 Hesap fişi HTML alınıyor: print-order/order/${localOrderId}`);
+      const receiptResponse = await fetch(`https://api.easycorest.com:5555/api/print-order/order/${localOrderId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!receiptResponse.ok) {
+        throw new Error(`Receipt API error: ${receiptResponse.status}`);
+      }
+
+      const htmlContent = await receiptResponse.text();
+      
+      if (!htmlContent || typeof htmlContent !== 'string') {
+        throw new Error('Hesap fişi HTML içeriği geçersiz');
+      }
+
+      console.log(`📄 Hesap fişi HTML alındı: ${htmlContent.length} karakter`);
+
+      // Ana Angular projeden: 3. Hesap fişini yazdır
+      const printResponse = await fetch('http://localhost:41411/api/receipt/print', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/html;charset=UTF-8',
+        },
+        body: htmlContent
+      });
+
+      if (printResponse.ok) {
+        const responseText = await printResponse.text();
+        console.log('✅ Hesap fişi yazıcı başarılı yanıt:', responseText);
+        console.log(`🖨️ Hesap fişi yazdırma tamamlandı: ${orderId}`);
+      } else {
+        throw new Error(`Print API error: ${printResponse.status}`);
+      }
+
+    } catch (error) {
+      console.error(`❌ Hesap fişi yazdırma hatası: ${orderId}`, error);
+      console.log(`🚫 Hesap fişi başarısız: ${orderId} - ${error}`);
+    }
+  };
+
+  // JSON kopyala
+  const copyOrderJson = (order: Order) => {
+    const orderId = OrderService.getOrderId(order);
+    console.log(`📤 JSON export: ${orderId}`);
+    
+    try {
+      const jsonString = JSON.stringify(order, null, 2);
+      navigator.clipboard.writeText(jsonString).then(() => {
+        console.log('✅ JSON kopyalandı');
+        alert(`JSON kopyalandı: ${orderId}`);
+      }).catch(error => {
+        console.error('❌ JSON kopyalama hatası:', error);
+        alert(`JSON kopyalama hatası: ${error}`);
+      });
+    } catch (error) {
+      console.error('❌ JSON export hatası:', error);
+      alert(`JSON export hatası: ${error}`);
+    }
+  };
+
+  // Ana Angular projeden: Tam termal HTML generator
+  const generateThermalHTML = (order: Order): string => {
+    const orderId = OrderService.getOrderId(order);
+    const customerName = OrderService.getCustomerName(order);
+    const customerPhone = OrderService.getCustomerPhone(order);
+    const address = OrderService.getDeliveryAddress(order);
+    const products = OrderService.getProducts(order);
+    const totalAmount = OrderService.getOrderAmount(order);
+    const orderType = OrderService.getOrderType(order);
+    const paymentType = OrderService.getPaymentType(order);
+
+    // Sipariş kaynağı adını al
+    const orderSource = order.type === 'YEMEKSEPETI' ? 'YEMEK SEPETİ' :
+      order.type === 'GETIR' ? 'GETİR' :
+      order.type === 'TRENDYOL' ? 'TRENDYOL' :
+      order.type === 'MIGROS' ? 'MİGROS' : order.type;
+
+    // Müşteri notu
+    let customerNote = '';
+    if (order.type === 'TRENDYOL') {
+      customerNote = order.rawData.customerNote || '';
+    } else {
+      customerNote = address.description || '';
+    }
+
+    // Platform-specific ürün HTML'i oluştur
+    let productsHtml = '';
+    
+    if (order.type === 'YEMEKSEPETI') {
+      productsHtml = products.map(product => {
+        let productHtml = `
+        <tr>
+          <td class="product-name">${OrderService.getProductName(product)}</td>
+          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
+          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
+        </tr>`;
+
+        // Ana Angular projeden: YemekSepeti Selected toppings
+        if (product.selectedToppings && product.selectedToppings.length > 0) {
+          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+          product.selectedToppings.forEach((topping: any) => {
+            if (topping && topping.name) {
+              // Güvenli fiyat dönüşümü
+              const toppingPriceNum = parseFloat(topping.price || 0);
+              const toppingPrice = toppingPriceNum > 0 ? ` (+${toppingPriceNum.toFixed(2)} ₺)` : '';
+              productHtml += `<div style="margin: 4px 0; color: #4CAF50; font-size: 16px;"><span style="font-weight: bold;">✓</span> ${topping.name}${toppingPrice}</div>`;
+              
+              // Ana Angular projeden: Children (alt seçenekler)
+              if (topping.children && topping.children.length > 0) {
+                topping.children.forEach((child: any) => {
+                  if (child && child.name) {
+                    // Güvenli fiyat dönüşümü
+                    const childPriceNum = parseFloat(child.price || 0);
+                    const childPrice = childPriceNum > 0 ? ` (+${childPriceNum.toFixed(2)} ₺)` : '';
+                    const isUnwanted = child.name.toLowerCase().includes('istemiyorum');
+                    const symbol = isUnwanted ? '✗' : '→';
+                    const color = isUnwanted ? '#f44336' : '#4CAF50';
+                    
+                    productHtml += `<div style="padding-left: 20px; margin: 3px 0; color: ${color}; font-size: 15px;">
+                      <span style="font-weight: bold;">${symbol}</span> ${child.name}${childPrice}
+                    </div>`;
+                  }
+                });
+              }
+            }
+          });
+          productHtml += '</td></tr>';
+        }
+
+        return productHtml;
+      }).join('');
+    } else if (order.type === 'MIGROS') {
+      // Ana Angular projeden: Migros ürün detayları
+      productsHtml = products.map(product => {
+        let productHtml = `
+        <tr>
+          <td class="product-name">${OrderService.getProductName(product)}</td>
+          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
+          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
+        </tr>`;
+
+        // Ana Angular projeden: Migros Options
+        if (product.options && product.options.length > 0) {
+          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+          
+          product.options.forEach((option: any) => {
+            if (option.headerName) {
+              productHtml += `<div style="margin: 5px 0; font-weight: bold; color: #333; font-size: 16px;">${option.headerName}</div>`;
+            }
+            
+            if (option.itemNames) {
+              const priceNum = parseFloat(option.primaryDiscountedPrice || 0);
+              const price = priceNum > 0 ? ` (+${(priceNum / 100).toFixed(2)} ₺)` : '';
+              productHtml += `<div style="margin: 3px 0; padding-left: 10px; color: #4CAF50; font-size: 15px;"><span style="font-weight: bold;">✓</span> ${option.itemNames}${price}</div>`;
+            }
+            
+            // Ana Angular projeden: Migros SubOptions (KRITIK!)
+            if (option.subOptions && option.subOptions.length > 0) {
+              option.subOptions.forEach((subOption: any) => {
+                const isUnwanted = subOption.itemNames?.toLowerCase().includes('istemiyorum') || 
+                                 subOption.optionType === 'INGREDIENT';
+                const symbol = isUnwanted ? '✗' : '✓';
+                const color = isUnwanted ? '#f44336' : '#4CAF50';
+                const priceNum = parseFloat(subOption.primaryDiscountedPrice || 0);
+                const price = priceNum > 0 ? ` (+${(priceNum / 100).toFixed(2)} ₺)` : '';
+                
+                productHtml += `<div style="margin: 3px 0; padding-left: 20px; color: ${color}; font-size: 14px;">
+                  <span style="font-weight: bold;">${symbol}</span> ${subOption.headerName || ''}: ${subOption.itemNames || ''}${price}
+                </div>`;
+              });
+            }
+          });
+          
+          productHtml += '</td></tr>';
+        }
+
+        return productHtml;
+      }).join('');
+    } else if (order.type === 'TRENDYOL') {
+      // Ana Angular projeden: Trendyol ürün detayları
+      productsHtml = products.map(product => {
+        let productHtml = `
+        <tr>
+          <td class="product-name">${OrderService.getProductName(product)}</td>
+          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
+          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
+        </tr>`;
+
+        // Ana Angular projeden: Trendyol Modifier Products
+        if (product.modifierProducts && product.modifierProducts.length > 0) {
+          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+          product.modifierProducts.forEach((modifier: any) => {
+            const modifierName = modifier.name || '';
+            const isUnwanted = modifierName.toLowerCase().includes('istemiyorum');
+            const priceNum = parseFloat(modifier.price || 0);
+            const price = priceNum > 0 ? ` (+${priceNum.toFixed(2)} ₺)` : '';
+            
+            if (isUnwanted) {
+              productHtml += `<div style="margin: 3px 0; color: #f44336; text-decoration: line-through; font-size: 15px;">
+                <span style="font-weight: bold;">⊖</span> ${modifierName}
+              </div>`;
+            } else {
+              productHtml += `<div style="margin: 3px 0; color: #4CAF50; font-size: 15px;">
+                <span style="font-weight: bold;">•</span> ${modifierName}${price}
+              </div>`;
+            }
+            
+            // Ana Angular projeden: SubModifiers (alt seçenekler)
+            if (modifier.subModifiers && modifier.subModifiers.length > 0) {
+              modifier.subModifiers.forEach((subModifier: any) => {
+                const subName = subModifier.name || '';
+                const subPriceNum = parseFloat(subModifier.price || 0);
+                const subPrice = subPriceNum > 0 ? ` (+${subPriceNum.toFixed(2)} ₺)` : '';
+                const isSubUnwanted = subName.toLowerCase().includes('istemiyorum');
+                
+                if (isSubUnwanted) {
+                  productHtml += `<div style="padding-left: 20px; margin: 3px 0; color: #f44336; text-decoration: line-through; font-size: 14px;">
+                    <span style="font-weight: bold;">⊖</span> ${subName}
+                  </div>`;
+                } else {
+                  productHtml += `<div style="padding-left: 20px; margin: 3px 0; color: #666; font-size: 14px;">
+                    <span style="font-weight: bold;">→</span> ${subName}${subPrice}
+                  </div>`;
+                }
+              });
+            }
+          });
+          productHtml += '</td></tr>';
+        }
+
+        return productHtml;
+      }).join('');
+    } else if (order.type === 'GETIR') {
+      // Ana Angular projeden: Getir ürün detayları
+      productsHtml = products.map(product => {
+        let productHtml = `
+        <tr>
+          <td class="product-name">${OrderService.getProductName(product)}</td>
+          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
+          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
+        </tr>`;
+
+        // Getir Options
+        if (product.options && product.options.length > 0) {
+          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+          
+          product.options.forEach((category: any) => {
+            if (category.name) {
+              productHtml += `<div style="margin: 4px 0; font-weight: bold; color: #333;">${category.name.tr || category.name.en || ''}</div>`;
+            }
+            
+            if (category.options && category.options.length > 0) {
+              category.options.forEach((option: any) => {
+                const price = option.price > 0 ? ` (+${option.price.toFixed(2)} ₺)` : '';
+                productHtml += `<div style="margin: 2px 0; padding-left: 10px; color: #4CAF50;">
+                  <span style="font-weight: bold;">✓</span> ${option.name?.tr || option.name?.en || ''}${price}
+                </div>`;
+                
+                // Option Categories (çıkarılacak malzemeler)
+                if (option.optionCategories && option.optionCategories.length > 0) {
+                  option.optionCategories.forEach((optCat: any) => {
+                    if (optCat.options && optCat.options.length > 0) {
+                      optCat.options.forEach((subOpt: any) => {
+                        const isRemoved = subOpt.name?.tr?.toLowerCase().includes('çıkar') || 
+                                         subOpt.name?.en?.toLowerCase().includes('remove');
+                        const symbol = isRemoved ? '✗' : '✓';
+                        const color = isRemoved ? '#f44336' : '#4CAF50';
+                        const subPrice = subOpt.price > 0 ? ` (+${subOpt.price.toFixed(2)} ₺)` : '';
+                        
+                        productHtml += `<div style="padding-left: 20px; margin: 2px 0; color: ${color};">
+                          <span style="font-weight: bold;">${symbol}</span> ${subOpt.name?.tr || subOpt.name?.en || ''}${subPrice}
+                        </div>`;
+                      });
+                    }
+                  });
+                }
+              });
+            }
+          });
+          
+          productHtml += '</td></tr>';
+        }
+
+        return productHtml;
+      }).join('');
+    } else {
+      // Diğer platformlar için basit liste
+      productsHtml = products.map(product => `
+        <tr>
+          <td class="product-name">${OrderService.getProductName(product)}</td>
+          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
+          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
+        </tr>
+      `).join('');
+    }
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sipariş #${orderId}</title>
+<style>
+body { font-family: 'Courier New', monospace; font-size: 16px; max-width: 72mm; margin: 0 auto; padding: 8px; line-height: 1.5; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+th, td { text-align: left; padding: 4px 3px; font-size: 15px; vertical-align: top; }
+.header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #000; }
+.order-id { font-size: 24px; font-weight: bold; margin-bottom: 6px; }
+.section-title { font-size: 18px; font-weight: bold; border-bottom: 1px solid #000; margin: 15px 0 8px; padding-bottom: 3px; }
+.product-name { font-size: 16px; font-weight: bold; }
+.quantity { text-align: center; font-weight: bold; font-size: 16px; }
+.price { text-align: right; font-weight: bold; font-size: 16px; }
+.total-row { font-weight: bold; font-size: 16px; padding: 6px 0; }
+.customer-info { font-size: 16px; }
+.label { font-weight: bold; width: 30%; font-size: 16px; }
+.customer-value { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="order-id">Sipariş #${orderId}</div>
+  <div style="font-size: 18px; font-weight: bold;">${orderSource}</div>
+  <div style="font-size: 16px;">${orderType}</div>
+  <div style="font-size: 14px; margin-top: 4px;">${formatDate(order.createdAt)}</div>
+</div>
+
+<div class="section-title">Müşteri Bilgileri</div>
+<table class="customer-info">
+<tr><td class="label">Ad Soyad:</td><td class="customer-value">${customerName}</td></tr>
+<tr><td class="label">Telefon:</td><td class="customer-value">${customerPhone}</td></tr>
+${address.address ? `<tr><td class="label">Adres:</td><td class="customer-value">${address.address}</td></tr>` : ''}
+${address.doorNo ? `<tr><td class="label">Kapı No:</td><td class="customer-value">${address.doorNo}</td></tr>` : ''}
+${address.floor ? `<tr><td class="label">Kat:</td><td class="customer-value">${address.floor}</td></tr>` : ''}
+${customerNote ? `<tr><td class="label">Sipariş Notu:</td><td class="customer-value">${customerNote}</td></tr>` : ''}
+</table>
+
+<div class="section-title">Ürünler</div>
+<table>
+<tr><th style="width:55%;font-size:16px">Ürün</th><th style="width:15%;font-size:16px">Adet</th><th style="width:30%;font-size:16px;text-align:right">Fiyat</th></tr>
+${productsHtml}
+</table>
+
+<table style="margin-top:10px;border-top:1px solid #000">
+<tr><td class="total-row" style="padding:5px 0">Sipariş Kaynağı: ${orderSource}</td></tr>
+<tr><td class="total-row" style="padding:5px 0">Sipariş Türü: ${orderType}</td></tr>
+<tr><td class="total-row" style="padding:5px 0">Ödeme Tipi: ${paymentType}</td></tr>
+<tr><td class="total-row" style="font-size:20px; padding:10px 0; border-top:2px solid #000;">
+  <strong>TOPLAM: ${formatPrice(totalAmount)} ₺</strong>
+</td></tr>
+</table>
+
+<div style="text-align: center; margin-top: 12px; font-size: 12px; border-top: 1px solid #000; padding-top: 8px;">
+Bu fiş ${new Date().toLocaleString('tr-TR')} tarihinde oluşturulmuştur.<br>
+EasyRest Desktop v1.0.0<br>
+Termal Yazdırma Sistemi
+</div>
+
+</body>
+</html>`;
   };
 
   const isNewOrder = (order: Order) => {
@@ -617,72 +1266,638 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
 
       </main>
 
-      {/* Order Details Modal */}
+      {/* MD Dosyalarından: Sipariş Detay Drawer */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setSelectedOrder(null)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-semibold">Sipariş #{OrderService.getOrderId(selectedOrder)}</h3>
-                <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-gray-100 rounded-lg">
-                  <span className="material-icons">close</span>
-                </button>
-              </div>
-            </div>
+        <>
+          {/* Overlay */}
+          <div 
+            className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setSelectedOrder(null)}>
+          </div>
 
-            {/* Modal Content */}
-            <div className="p-6 space-y-6">
+          {/* Drawer */}
+          <div className="fixed top-0 right-0 z-[9999] w-full lg:w-[900px] h-full transition-transform duration-300 ease-in-out">
+            <div className="h-full bg-white text-gray-900 shadow-2xl overflow-y-auto">
               
-              {/* Order Info */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      src={OrderService.getPlatformLogo(selectedOrder.type)} 
-                      alt={selectedOrder.type} 
-                      className="w-12 h-12 object-contain" 
-                    />
-                    <div>
-                      <div className="text-lg font-bold">#{OrderService.getOrderId(selectedOrder)}</div>
-                      <div className="text-sm text-gray-600">{OrderService.getStatusText(selectedOrder.status)}</div>
-                      <div className="text-sm text-gray-600">{selectedOrder.type}</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold">{formatPrice(OrderService.getOrderAmount(selectedOrder))} ₺</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Customer */}
-              <div>
-                <h4 className="font-medium mb-2">Müşteri Bilgileri</h4>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-500">Ad Soyad</div>
-                      <div className="font-medium">{OrderService.getCustomerName(selectedOrder)}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions - SADECE ONAY */}
-              <div className="border-t pt-4">
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => handleApproveOrder(selectedOrder)}
-                    className="px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium flex items-center gap-2">
-                    <span className="material-icons">check_circle</span>
-                    Siparişi Onayla
+              {/* Drawer Header */}
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-semibold">Sipariş Detayı</h3>
+                  <button 
+                    onClick={() => setSelectedOrder(null)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <span className="material-icons text-xl">close</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Sipariş Detayları */}
+              <div className="p-6 space-y-8">
+                
+                {/* Sipariş Başlığı */}
+                <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <img 
+                          src={OrderService.getPlatformLogo(selectedOrder.type)} 
+                          alt={selectedOrder.type}
+                          className="w-16 h-16 object-contain rounded-xl bg-white p-2 shadow-md"
+                        />
+                        
+                        {/* Platform Badge */}
+                        <div className={`absolute -bottom-1 -right-1 px-2 py-0.5 text-xs font-bold rounded-full text-white ${
+                          selectedOrder.type === 'YEMEKSEPETI' ? 'bg-blue-500' :
+                          selectedOrder.type === 'TRENDYOL' ? 'bg-orange-500' :
+                          selectedOrder.type === 'MIGROS' ? 'bg-green-500' :
+                          selectedOrder.type === 'GETIR' ? 'bg-purple-500' : 'bg-gray-500'
+                        }`}>
+                          {selectedOrder.type}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-2xl font-bold flex items-center gap-2">
+                          #{OrderService.getOrderId(selectedOrder)}
+                          {isNewOrder(selectedOrder) && (
+                            <span className="text-red-500 text-lg animate-pulse">🆕</span>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-medium ${
+                            OrderService.getStatusText(selectedOrder.status).includes('Onay') ? 'bg-green-100 text-green-800' :
+                            OrderService.getStatusText(selectedOrder.status).includes('Yeni') ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {OrderService.getStatusText(selectedOrder.status)}
+                          </span>
+                        </div>
+                        
+                        <div className="mt-2 text-sm text-gray-600 flex items-center gap-2">
+                          <span className="material-icons text-sm">local_shipping</span>
+                          <span>{OrderService.getOrderType(selectedOrder)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Fiyat ve Ödeme */}
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-gray-900">
+                        {formatPrice(OrderService.getOrderAmount(selectedOrder))} ₺
+                      </div>
+                      <div className="text-sm text-gray-600 mt-2 flex items-center gap-2">
+                        <span className="material-icons text-sm">payment</span>
+                        <span>{OrderService.getPaymentType(selectedOrder)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Müşteri Bilgileri */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-gray-700 flex items-center gap-2">
+                    <span className="material-icons">person</span>
+                    Müşteri Bilgileri
+                  </h4>
+                  
+                  <div className="bg-gray-50 p-6 rounded-xl space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Ad Soyad */}
+                      <div className="flex items-center gap-3">
+                        <span className="material-icons text-gray-500">badge</span>
+                        <div>
+                          <div className="text-xs text-gray-500">Ad Soyad</div>
+                          <div className="font-medium">{OrderService.getCustomerName(selectedOrder)}</div>
+                        </div>
+                      </div>
+                      
+                      {/* Telefon */}
+                      <div className="flex items-center gap-3">
+                        <span className="material-icons text-gray-500">phone</span>
+                        <div>
+                          <div className="text-xs text-gray-500">Telefon</div>
+                          <div className="font-medium">{OrderService.getCustomerPhone(selectedOrder)}</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Adres Bilgileri */}
+                    {(() => {
+                      const address = OrderService.getDeliveryAddress(selectedOrder);
+                      if (!address.address) return null;
+                      
+                      return (
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <span className="material-icons text-gray-500 mt-1">location_on</span>
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-500">Adres</div>
+                              <div className="font-medium">{address.address}</div>
+                            </div>
+                          </div>
+                          
+                          {(address.doorNo || address.floor) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {address.doorNo && (
+                                <div className="flex items-center gap-3">
+                                  <span className="material-icons text-gray-500">door_front</span>
+                                  <div>
+                                    <div className="text-xs text-gray-500">Kapı No</div>
+                                    <div className="font-medium">{address.doorNo}</div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {address.floor && (
+                                <div className="flex items-center gap-3">
+                                  <span className="material-icons text-gray-500">layers</span>
+                                  <div>
+                                    <div className="text-xs text-gray-500">Kat</div>
+                                    <div className="font-medium">{address.floor}</div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {address.description && (
+                            <div className="flex items-start gap-3">
+                              <span className="material-icons text-gray-500 mt-1">note</span>
+                              <div className="flex-1">
+                                <div className="text-xs text-gray-500">Not</div>
+                                <div className="font-medium">{address.description}</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Ürünler Detayı */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-gray-700 flex items-center gap-2">
+                    <span className="material-icons">restaurant_menu</span>
+                    Sipariş İçeriği
+                    <span className="text-sm text-gray-500">({OrderService.getProducts(selectedOrder).length} ürün)</span>
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    {OrderService.getProducts(selectedOrder).map((product, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        {/* Ürün Header */}
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-start gap-3">
+                              {/* Ürün Adı */}
+                              <div className="flex-1">
+                                <span className="font-medium text-base text-gray-900">
+                                  {OrderService.getProductName(product)}
+                                </span>
+                                
+                                {/* Ürün Eşleştirme Durumu */}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-gray-500">Eşleştirme:</span>
+                                  {((selectedOrder?.type !== 'TRENDYOL' && product.mapping?.localProduct) ||
+                                    (selectedOrder?.type === 'TRENDYOL' && product.mapping?.eslestirilenUrun)) ? (
+                                    <span className="text-green-600 text-xs flex items-center gap-1">
+                                      <span className="material-icons text-sm">check_circle</span>
+                                      <span>{selectedOrder?.type === 'TRENDYOL' ? product.mapping.eslestirilenUrun.urunAdi : product.mapping.localProduct.urunAdi}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-red-500 flex items-center gap-1 text-xs">
+                                      <span className="material-icons text-sm">error</span>
+                                      <span>Eşleştirme Yok</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Miktar ve Fiyat */}
+                              <div className="text-right">
+                                <div className="font-medium text-lg">x{OrderService.getProductQuantity(product)}</div>
+                                <div className="text-sm text-gray-500">{(product.price || 0).toFixed(2)} ₺</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Platform-Specific Ürün Detayları */}
+                        
+                        {/* Getir Ürün Seçimleri */}
+                        {selectedOrder?.type === 'GETIR' && product?.options?.length > 0 && (
+                          <div className="mt-4 space-y-3 pl-4 border-l-2 border-purple-200">
+                            <h5 className="text-sm font-medium text-purple-700 flex items-center gap-2">
+                              <span className="material-icons text-sm">tune</span>
+                              Ürün Seçimleri
+                            </h5>
+                            
+                            {product.options.map((category: any, catIndex: number) => (
+                              <div key={catIndex} className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="material-icons text-sm text-gray-500">category</span>
+                                  <div className="font-medium text-sm">{category.name?.tr || category.name?.en}</div>
+                                </div>
+                                
+                                <div className="pl-6 space-y-2">
+                                  {category.options?.map((option: any, optIndex: number) => (
+                                    <div key={optIndex} className="space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <span className="material-icons text-sm text-gray-400">arrow_right</span>
+                                          <span className="text-sm text-gray-700">
+                                            {option.name?.tr || option.name?.en}
+                                          </span>
+                                          {option.price > 0 && (
+                                            <span className="text-xs text-gray-500">
+                                              (+{formatPrice(option.price)} ₺)
+                                            </span>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Option Eşleştirme */}
+                                        <div className="flex items-center gap-1">
+                                          {option.mapping?.localProduct ? (
+                                            <span className="text-green-600 text-xs flex items-center gap-1">
+                                              <span className="material-icons text-xs">check</span>
+                                              <span>{option.mapping.localProduct.urunAdi}</span>
+                                            </span>
+                                          ) : (
+                                            <span className="text-red-500 text-xs flex items-center gap-1">
+                                              <span className="material-icons text-xs">close</span>
+                                              <span>Eşleştirme Yok</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Alt Seçenekler (Soslar, Çıkarılacak Malzemeler) */}
+                                      {option.optionCategories?.length > 0 && (
+                                        <div className="pl-4 space-y-1">
+                                          {option.optionCategories.map((optionCategory: any, subCatIndex: number) => (
+                                            <div key={subCatIndex}>
+                                              <div className="text-xs font-medium text-gray-600 mb-1">
+                                                {optionCategory.name?.tr || optionCategory.name?.en}:
+                                              </div>
+                                              <div className="pl-2 space-y-1">
+                                                {optionCategory.options?.map((subOption: any, subOptIndex: number) => (
+                                                  <div key={subOptIndex} className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                      <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                                      <span className="text-xs text-gray-600">
+                                                        {subOption.name?.tr || subOption.name?.en}
+                                                      </span>
+                                                      {subOption.price > 0 && (
+                                                        <span className="text-xs text-gray-500">
+                                                          (+{formatPrice(subOption.price)} ₺)
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    
+                                                    {/* SubOption Eşleştirme */}
+                                                    <div className="flex items-center gap-1">
+                                                      {subOption.mapping?.localProduct ? (
+                                                        <span className="text-green-600 text-xs">
+                                                          ✓ {subOption.mapping.localProduct.urunAdi}
+                                                        </span>
+                                                      ) : (
+                                                        <span className="text-red-500 text-xs">
+                                                          ✗ Eşleştirme Yok
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Migros Ürün Seçimleri */}
+                        {selectedOrder?.type === 'MIGROS' && product?.options?.length > 0 && (
+                          <div className="mt-4 space-y-3 pl-4 border-l-2 border-green-200">
+                            <h5 className="text-sm font-medium text-green-700 flex items-center gap-2">
+                              <span className="material-icons text-sm">tune</span>
+                              Ürün Seçimleri
+                            </h5>
+                            
+                            {product.options.map((option: any, optIndex: number) => (
+                              <div key={optIndex} className="space-y-2">
+                                <div className="bg-white p-3 rounded-lg">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="material-icons text-sm text-gray-500">label</span>
+                                      <div className="font-medium text-sm">{option.headerName}</div>
+                                    </div>
+                                    
+                                    {/* Option Eşleştirme */}
+                                    <div className="flex items-center gap-1">
+                                      {option.mapping?.localProduct ? (
+                                        <span className="text-green-600 text-xs flex items-center gap-1">
+                                          <span className="material-icons text-xs">check</span>
+                                          <span>{option.mapping.localProduct.urunAdi}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-red-500 text-xs flex items-center gap-1">
+                                          <span className="material-icons text-xs">close</span>
+                                          <span>Eşleştirme Yok</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-sm text-gray-600">
+                                      {option.itemNames}
+                                    </div>
+                                    {option.primaryDiscountedPrice > 0 && (
+                                      <div className="text-xs text-gray-500">
+                                        (+{option.primaryDiscountedPriceText})
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Migros Alt Seçenekler */}
+                                  {option.subOptions?.length > 0 && (
+                                    <div className="mt-3 pl-3 border-l border-gray-200">
+                                      {option.subOptions.map((subOption: any, subIndex: number) => (
+                                        <div key={subIndex} className="mb-2">
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                              <span className="material-icons text-sm text-gray-400">subdirectory_arrow_right</span>
+                                              <div>
+                                                <div className="text-xs font-medium text-gray-600">{subOption.headerName}</div>
+                                                <div className="text-sm">{subOption.itemNames}</div>
+                                              </div>
+                                            </div>
+                                            
+                                            {/* SubOption Eşleştirme */}
+                                            <div className="flex items-center gap-1">
+                                              {subOption.mapping?.localProduct ? (
+                                                <span className="text-green-600 text-xs">
+                                                  ✓ {subOption.mapping.localProduct.urunAdi}
+                                                </span>
+                                              ) : (
+                                                <span className="text-red-500 text-xs">
+                                                  ✗ Eşleştirme Yok
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          
+                                          {subOption.primaryDiscountedPrice > 0 && (
+                                            <div className="text-xs text-gray-500 ml-6">
+                                              (+{subOption.primaryDiscountedPriceText})
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* YemekSepeti Ürün Seçimleri */}
+                        {selectedOrder?.type === 'YEMEKSEPETI' && product?.selectedToppings?.length > 0 && (
+                          <div className="mt-4 space-y-3 pl-4 border-l-2 border-blue-200">
+                            <h5 className="text-sm font-medium text-blue-700 flex items-center gap-2">
+                              <span className="material-icons text-sm">add_circle</span>
+                              Seçili Toppings
+                            </h5>
+                            
+                            {product.selectedToppings.map((topping: any, toppingIndex: number) => (
+                              <div key={toppingIndex} className="space-y-2">
+                                <div className="bg-white p-3 rounded-lg">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="material-icons text-sm text-gray-500">add</span>
+                                      <div className="font-medium text-sm">{topping?.name || ''}</div>
+                                    </div>
+                                    
+                                    {/* Topping Eşleştirme */}
+                                    <div className="flex items-center gap-1">
+                                      {topping.mapping?.localProduct ? (
+                                        <span className="text-green-600 text-xs flex items-center gap-1">
+                                          <span className="material-icons text-xs">check</span>
+                                          <span>{topping.mapping.localProduct.urunAdi}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-red-500 text-xs flex items-center gap-1">
+                                          <span className="material-icons text-xs">close</span>
+                                          <span>Eşleştirme Yok</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Children */}
+                                  {topping?.children?.length > 0 && (
+                                    <div className="mt-2 pl-3 border-l border-gray-200">
+                                      {topping.children.map((child: any, childIndex: number) => (
+                                        <div key={childIndex} className="flex items-center justify-between mb-1">
+                                          <div className="flex items-center gap-2">
+                                            <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                            <span className="text-sm text-gray-600">
+                                              {child?.name || ''}
+                                            </span>
+                                            {child?.price > 0 && (
+                                              <span className="text-xs text-gray-500">
+                                                (+{formatPrice(child.price)} ₺)
+                                              </span>
+                                            )}
+                                          </div>
+                                          
+                                          {/* Child Eşleştirme */}
+                                          <div className="flex items-center gap-1">
+                                            {child.mapping?.localProduct ? (
+                                              <span className="text-green-600 text-xs">
+                                                ✓ {child.mapping.localProduct.urunAdi}
+                                              </span>
+                                            ) : (
+                                              <span className="text-red-500 text-xs">
+                                                ✗ Eşleştirme Yok
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Trendyol Ürün Seçimleri */}
+                        {selectedOrder?.type === 'TRENDYOL' && product?.modifierProducts?.length > 0 && (
+                          <div className="mt-4 space-y-3 pl-4 border-l-2 border-orange-200">
+                            <h5 className="text-sm font-medium text-orange-700 flex items-center gap-2">
+                              <span className="material-icons text-sm">extension</span>
+                              Modifier Products
+                            </h5>
+                            
+                            {product.modifierProducts.map((modifier: any, modIndex: number) => (
+                              <div key={modIndex} className="space-y-2">
+                                <div className="bg-white p-3 rounded-lg">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`material-icons text-sm ${
+                                        modifier.name?.toLowerCase().includes('istemiyorum') ? 'text-red-500' : 'text-gray-500'
+                                      }`}>
+                                        {modifier.name?.toLowerCase().includes('istemiyorum') ? 'remove_circle' : 'add_circle'}
+                                      </span>
+                                      <div className={`font-medium text-sm ${
+                                        modifier.name?.toLowerCase().includes('istemiyorum') ? 'text-red-600' : 'text-gray-900'
+                                      }`}>
+                                        {modifier.name || ''}
+                                      </div>
+                                      {modifier.price > 0 && (
+                                        <div className="text-xs text-gray-500">
+                                          (+{formatPrice(modifier.price)} ₺)
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Modifier Eşleştirme */}
+                                    <div className="flex items-center gap-1">
+                                      {modifier.mapping?.eslestirilenUrun ? (
+                                        <span className="text-green-600 text-xs flex items-center gap-1">
+                                          <span className="material-icons text-xs">check</span>
+                                          <span>{modifier.mapping.eslestirilenUrun.urunAdi}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-red-500 text-xs flex items-center gap-1">
+                                          <span className="material-icons text-xs">close</span>
+                                          <span>Eşleştirme Yok</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Alt Modifierlar */}
+                                  {modifier.modifierProducts?.length > 0 && (
+                                    <div className="mt-2 pl-3 border-l border-gray-200">
+                                      {modifier.modifierProducts.map((subModifier: any, subModIndex: number) => (
+                                        <div key={subModIndex} className="flex items-center justify-between mb-1">
+                                          <div className="flex items-center gap-2">
+                                            <span className={`material-icons text-xs ${
+                                              subModifier.name?.toLowerCase().includes('istemiyorum') ? 'text-red-500' : 'text-gray-400'
+                                            }`}>
+                                              {subModifier.name?.toLowerCase().includes('istemiyorum') ? 'remove' : 'arrow_right'}
+                                            </span>
+                                            <span className={`text-sm ${
+                                              subModifier.name?.toLowerCase().includes('istemiyorum') ? 'text-red-600 line-through' : 'text-gray-600'
+                                            }`}>
+                                              {subModifier.name || ''}
+                                            </span>
+                                            {subModifier.price > 0 && (
+                                              <span className="text-xs text-gray-500">
+                                                (+{formatPrice(subModifier.price)} ₺)
+                                              </span>
+                                            )}
+                                          </div>
+                                          
+                                          {/* SubModifier Eşleştirme */}
+                                          <div className="flex items-center gap-1">
+                                            {subModifier.mapping?.eslestirilenUrun ? (
+                                              <span className="text-green-600 text-xs">
+                                                ✓ {subModifier.mapping.eslestirilenUrun.urunAdi}
+                                              </span>
+                                            ) : (
+                                              <span className="text-red-500 text-xs">
+                                                ✗ Eşleştirme Yok
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sipariş Özeti ve Aksiyonlar - Sticky Bottom */}
+                <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 mt-8">
+                  <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
+                    {/* Özet Bilgiler */}
+                    <div className="flex justify-between items-center text-xl mb-6">
+                      <span className="font-medium flex items-center gap-2">
+                        <span className="material-icons">receipt</span>
+                        Toplam Tutar
+                      </span>
+                      <span className="font-bold text-2xl">{formatPrice(OrderService.getOrderAmount(selectedOrder))} ₺</span>
+                    </div>
+
+                    {/* Ana Angular Projeden: Tüm Aksiyon Butonları */}
+                    <div className="flex flex-wrap gap-3 justify-end">
+                      
+                      {/* Sipariş Onaylama Butonu */}
+                      <button
+                        onClick={() => handleApproveOrder(selectedOrder)}
+                        className="px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-sm transition-all duration-200 flex items-center gap-2 font-medium">
+                        <span className="material-icons text-lg">check_circle</span>
+                        <span>Siparişi Onayla</span>
+                      </button>
+
+                      {/* Tekrar Onay Gönder */}
+                      <button 
+                        onClick={() => handleApproveOrder(selectedOrder)}
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                        <span className="material-icons text-lg">refresh</span>
+                        <span>Tekrar Gönder</span>
+                      </button>
+
+                      {/* Termal Yazdır */}
+                      <button 
+                        onClick={() => printToThermalPrinter(selectedOrder)}
+                        className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                        <span className="material-icons text-lg">print</span>
+                        <span>Termal Yazdır</span>
+                      </button>
+
+                      {/* Hesap Fişi Yazdır */}
+                      <button 
+                        onClick={() => printAccountReceipt(selectedOrder)}
+                        className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                        <span className="material-icons text-lg">receipt_long</span>
+                        <span>Hesap Fişi</span>
+                      </button>
+
+                      {/* JSON Kopyala */}
+                      <button 
+                        onClick={() => copyOrderJson(selectedOrder)}
+                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                        <span className="material-icons text-lg">code</span>
+                        <span>JSON Kopyala</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
