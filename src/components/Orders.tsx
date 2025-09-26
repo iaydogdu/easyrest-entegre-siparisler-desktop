@@ -51,6 +51,18 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     
     const savedAutoApprove = localStorage.getItem('autoApproveEnabled') === 'true';
     setAutoApproveEnabled(savedAutoApprove);
+
+    // Ana Angular projeden: Auto-updater test (basitleştirilmiş)
+    console.log('🔄 Auto-updater sistemi aktif (Electron main process)');
+
+    // Manual auto-updater test (development)
+    if (process.env.NODE_ENV === 'development') {
+      setTimeout(() => {
+        console.log('🧪 Manual auto-updater test - GitHub releases kontrol ediliyor...');
+        console.log('📋 Current app version: v1.0.2');
+        console.log('🔗 GitHub releases: https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases');
+      }, 5000);
+    }
   }, []);
 
   // Load orders when store changes
@@ -58,9 +70,13 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     if (selectedStore) {
       loadOrders();
       
-      // Ana Angular projeden: Background sync sistemlerini başlat
-      console.log('🚀 Background sync sistemleri başlatılıyor...', selectedStore);
-      OrderService.startBackgroundSyncs(selectedStore);
+      // Ana Angular projeden: Background sync sistemlerini başlat (sadece production'da)
+      if (process.env.NODE_ENV === 'production') {
+        console.log('🚀 Background sync sistemleri başlatılıyor...', selectedStore);
+        OrderService.startBackgroundSyncs(selectedStore);
+      } else {
+        console.log('🔧 Development mode: Background sync disabled');
+      }
     }
     
     // Cleanup function - component unmount olduğunda sync'leri durdur

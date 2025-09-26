@@ -23,17 +23,24 @@ class Main {
     app.on('window-all-closed', this.onWindowAllClosed.bind(this));
     app.on('activate', this.onActivate.bind(this));
 
-    // Auto updater events - sadece production'da ve autoUpdater varsa çalıştır
-    if (!isDev && autoUpdater) {
-      // Uygulama başladıktan 30 saniye sonra güncellemeleri kontrol et
-      setTimeout(() => {
-        autoUpdater.checkForUpdatesAndNotify();
-      }, 30000);
+    // Auto updater events - development'ta da test edelim
+    if (autoUpdater) {
+      console.log('🔄 Auto-updater başlatılıyor...', { isDev, version: app.getVersion() });
       
-      // Her 4 saatte bir güncelleme kontrol et
-      setInterval(() => {
+      // Uygulama başladıktan 10 saniye sonra güncellemeleri kontrol et (test için kısa)
+      setTimeout(() => {
+        console.log('🔍 Update kontrolü başlatılıyor...');
         autoUpdater.checkForUpdatesAndNotify();
-      }, 4 * 60 * 60 * 1000);
+      }, 10000);
+      
+      // Development'ta 1 dakikada bir, production'da 4 saatte bir
+      const interval = isDev ? 60000 : 4 * 60 * 60 * 1000;
+      setInterval(() => {
+        console.log('⏰ Scheduled update check...');
+        autoUpdater.checkForUpdatesAndNotify();
+      }, interval);
+    } else {
+      console.warn('⚠️ Auto-updater mevcut değil!');
     }
     
     this.setupAutoUpdater();
@@ -68,6 +75,14 @@ class Main {
     // Development'ta DevTools aç
     if (isDev) {
       this.mainWindow.webContents.openDevTools();
+      
+      // Auto-updater loglarını React console'a da gönder
+      setTimeout(() => {
+        this.mainWindow.webContents.executeJavaScript(`
+          console.log('🔄 Electron Auto-updater test başlatılıyor...');
+          console.log('📋 Current version: ${app.getVersion()}');
+        `);
+      }, 2000);
     }
 
     // Pencere hazır olduğunda göster
@@ -164,7 +179,19 @@ class Main {
     autoUpdater.autoInstallOnAppQuit = true; // Uygulama kapanırken otomatik yükle
 
     autoUpdater.on('checking-for-update', () => {
-      console.log('Güncellemeler kontrol ediliyor...');
+      const logData = {
+        currentVersion: app.getVersion(),
+        updateUrl: autoUpdater.getFeedURL()
+      };
+      console.log('🔍 Güncellemeler kontrol ediliyor...', logData);
+      
+      // React console'a da gönder
+      this.sendToRenderer('console-log', {
+        type: 'log',
+        message: '🔍 Auto-updater: Güncellemeler kontrol ediliyor...',
+        data: logData
+      });
+      
       this.sendToRenderer('update-status', { status: 'checking' });
     });
 
@@ -203,7 +230,11 @@ class Main {
     });
 
     autoUpdater.on('update-not-available', (info) => {
-      console.log('Güncelleme mevcut değil:', info);
+      console.log('📭 Güncelleme mevcut değil:', {
+        currentVersion: app.getVersion(),
+        latestVersion: info.version,
+        updateUrl: autoUpdater.getFeedURL()
+      });
       this.sendToRenderer('update-status', { status: 'not-available' });
     });
 

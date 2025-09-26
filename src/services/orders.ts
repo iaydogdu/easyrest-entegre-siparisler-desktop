@@ -145,13 +145,16 @@ export class OrderService {
               console.log(`🔄 Type normalize edildi: ${order.platform} → ${order.type}`);
             }
 
-        debugLog(`📋 Sipariş ${index + 1}:`, {
-          originalPlatform: order.platform,
-          normalizedType: order.type,
-          status: order.status,
-          hasRawData: !!order.rawData,
-          rawDataKeys: order.rawData ? Object.keys(order.rawData) : []
-        });
+        // Sadece ilk 3 sipariş için debug (spam önleme)
+        if (index < 3) {
+          debugLog(`📋 Sipariş ${index + 1}:`, {
+            originalPlatform: order.platform,
+            normalizedType: order.type,
+            status: order.status,
+            hasRawData: !!order.rawData,
+            rawDataKeys: order.rawData ? Object.keys(order.rawData) : []
+          });
+        }
           });
         }
 
@@ -2031,7 +2034,8 @@ export class OrderService {
     const status = order.status.toString().toLowerCase();
     const orderId = OrderService.getOrderId(order);
     
-    debugLog(`🔍 Yeni sipariş kontrolü: ${orderId} (${order.type}) - Status: ${status}`);
+    // Sadece yeni siparişler için log (spam önleme)
+    // debugLog(`🔍 Yeni sipariş kontrolü: ${orderId} (${order.type}) - Status: ${status}`);
 
     // Platform-specific kontroller
     const isNew = OrderService.checkNewOrderByPlatform(order, status);
