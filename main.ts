@@ -9,6 +9,9 @@ class Main {
   private mainWindow: BrowserWindow | null = null;
 
   constructor() {
+    // Browser açılmasını engelle
+    process.env.BROWSER = 'none';
+    
     app.on('ready', this.createWindow);
     app.on('window-all-closed', this.onWindowAllClosed);
     app.on('activate', this.onActivate);
@@ -57,8 +60,8 @@ class Main {
     });
 
     const url = isDev 
-      ? 'http://localhost:4200' 
-      : `file://${path.join(__dirname, '../dist/index.html')}`;
+      ? 'http://localhost:3002' 
+      : `file://${path.join(__dirname, '../build/index.html')}`;
     
     this.mainWindow.loadURL(url);
 

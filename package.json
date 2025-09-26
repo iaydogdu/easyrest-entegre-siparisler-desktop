@@ -5,11 +5,11 @@
   "main": "dist/main.js",
   "homepage": "./",
   "scripts": {
-    "start": "ng serve",
-    "build": "ng build",
-    "build:electron": "ng build --configuration production && npm run electron:build",
+    "start": "set PORT=3002 && react-scripts start",
+    "build": "react-scripts build",
+    "build:electron": "npm run build && npm run electron:build",
     "electron": "npm run build:electron && electron .",
-    "electron:dev": "concurrently \"ng serve\" \"wait-on http://localhost:4200 && electron .\"",
+    "electron:dev": "concurrently \"npm start\" \"wait-on http://localhost:3002 && electron .\"",
     "electron:build": "tsc main.ts --outDir dist",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
@@ -51,33 +51,55 @@
   },
   "dependencies": {
     "@angular/animations": "^17.0.0",
+    "@angular/cdk": "^17.0.0",
     "@angular/common": "^17.0.0",
     "@angular/compiler": "^17.0.0",
     "@angular/core": "^17.0.0",
     "@angular/forms": "^17.0.0",
+    "@angular/material": "^17.0.0",
     "@angular/platform-browser": "^17.0.0",
     "@angular/platform-browser-dynamic": "^17.0.0",
     "@angular/router": "^17.0.0",
-    "@angular/cdk": "^17.0.0",
-    "@angular/material": "^17.0.0",
     "@ng-select/ng-select": "^14.2.0",
     "@ngx-translate/core": "^15.0.0",
     "@ngx-translate/http-loader": "^8.0.0",
-    "rxjs": "~7.8.0",
-    "tslib": "^2.3.0",
-    "zone.js": "~0.14.0",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "autoprefixer": "^10.4.21",
     "electron-updater": "^6.1.7",
-    "sweetalert2": "^11.7.0"
+    "postcss": "^8.5.6",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-scripts": "^5.0.1",
+    "rxjs": "~7.8.0",
+    "sweetalert2": "^11.7.0",
+    "tailwindcss": "^4.1.13",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.14.0"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^17.0.0",
     "@angular/cli": "^17.0.0",
     "@angular/compiler-cli": "^17.0.0",
-    "@types/node": "^18.18.0",
+    "@types/node": "^18.19.127",
     "concurrently": "^8.2.2",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
     "typescript": "~5.2.0",
     "wait-on": "^7.2.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

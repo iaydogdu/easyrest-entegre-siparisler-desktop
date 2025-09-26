@@ -1,65 +1,34 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-// Type definitions for ElectronAPI
-interface ElectronAPI {
-  // Versiyon ve uygulama bilgileri
-  getAppVersion: () => Promise<{
-    version: string;
-    electron: string;
-    node: string;
-    platform: string;
-  }>;
+// Electron API'yi güvenli şekilde expose et
+contextBridge.exposeInMainWorld('electronAPI', {
+  // App info
+  getVersion: () => ipcRenderer.invoke('get-version'),
   
-  // Güncelleme sistemi
-  checkForUpdates: () => Promise<any>;
-  onUpdateStatus: (callback: (event: any, data: any) => void) => void;
-  removeUpdateStatusListener: () => void;
+  // Window controls
+  minimize: () => ipcRenderer.invoke('minimize-window'),
+  maximize: () => ipcRenderer.invoke('maximize-window'),
+  close: () => ipcRenderer.invoke('close-window'),
   
-  // Pencere kontrolü
-  minimizeWindow: () => Promise<void>;
-  maximizeWindow: () => Promise<void>;
-  closeWindow: () => Promise<void>;
-  restartApp: () => Promise<void>;
-  
-  // Platform bilgisi
-  platform: string;
-  
-  // Event listener yönetimi
-  removeAllListeners: (channel: string) => void;
-}
-
-const electronAPI: ElectronAPI = {
-  // Versiyon ve uygulama bilgileri
-  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
-  
-  // Güncelleme sistemi
-  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-  onUpdateStatus: (callback) => {
-    ipcRenderer.on('update-status', callback);
-  },
-  removeUpdateStatusListener: () => {
-    ipcRenderer.removeAllListeners('update-status');
+  // Notifications
+  showNotification: (title: string, body: string) => {
+    return ipcRenderer.invoke('show-notification', { title, body });
   },
   
-  // Pencere kontrolü
-  minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
-  maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
-  closeWindow: () => ipcRenderer.invoke('close-window'),
-  restartApp: () => ipcRenderer.invoke('restart-app'),
-  
-  // Platform bilgisi
-  platform: process.platform,
-  
-  // Event listener yönetimi
-  removeAllListeners: (channel: string) => ipcRenderer.removeAllListeners(channel)
-};
+  // System
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+});
 
-// ElectronAPI'yi global scope'a ekle
-contextBridge.exposeInMainWorld('electronAPI', electronAPI);
-
-// TypeScript için global type tanımlaması
+// Type declaration for window
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    electronAPI: {
+      getVersion: () => Promise<string>;
+      minimize: () => Promise<void>;
+      maximize: () => Promise<void>;
+      close: () => Promise<void>;
+      showNotification: (title: string, body: string) => Promise<void>;
+      openExternal: (url: string) => Promise<void>;
+    };
   }
 }
