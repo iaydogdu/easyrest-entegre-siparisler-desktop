@@ -34,6 +34,11 @@ let trendyolRefundSyncInProgress = false;
 let yemeksepetiRefundSyncInProgress = false;
 let ordersLoadInProgress = false;
 
+// Global API lock - aynı anda sadece 1 request
+let globalApiLock = false;
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 2000; // 2 saniye minimum aralık
+
 export interface Order {
   _id: string;
   type: 'YEMEKSEPETI' | 'TRENDYOL' | 'MIGROS' | 'GETIR';
@@ -67,13 +72,22 @@ export class OrderService {
         throw new Error('No authentication token');
       }
 
+      // Ana Angular projeden: Global API lock kontrolü
+      const now = Date.now();
+      if (globalApiLock || (now - lastRequestTime < MIN_REQUEST_INTERVAL)) {
+        warnLog('🔒 Global API lock aktif, request engellendi');
+        throw new Error('API lock aktif');
+      }
+
       // Ana Angular projeden: Progress kontrolü - bir request bitmeden diğerini atma
       if (ordersLoadInProgress) {
         warnLog('⏳ Önceki sipariş yükleme henüz bitmedi, yeni istek engellendi');
         throw new Error('Önceki request devam ediyor');
       }
 
+      globalApiLock = true;
       ordersLoadInProgress = true;
+      lastRequestTime = now;
       debugLog(`📦 Sipariş API çağrısı: ${storeId}`);
 
       // Ana Angular projeden: Timeout kontrolü (15 saniye)
@@ -172,6 +186,7 @@ export class OrderService {
     } finally {
       // Ana Angular projeden: Her durumda progress'i false yap
       ordersLoadInProgress = false;
+      globalApiLock = false;
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthService } from '../services/auth';
 
 interface LoginProps {
@@ -10,6 +10,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Ana Angular projeden: Hatırlanan bilgileri yükle
+  useEffect(() => {
+    const savedUsername = localStorage.getItem('rememberedUsername');
+    const savedPassword = localStorage.getItem('rememberedPassword');
+    const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
+    
+    if (savedRememberMe && savedUsername) {
+      setUsername(savedUsername);
+      setPassword(savedPassword || '');
+      setRememberMe(true);
+      console.log('✅ Hatırlanan bilgiler yüklendi:', savedUsername);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +42,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       
       if (result.success) {
         console.log('✅ Login başarılı');
+        
+        // Ana Angular projeden: Beni hatırla özelliği
+        if (rememberMe) {
+          localStorage.setItem('rememberedUsername', username);
+          localStorage.setItem('rememberedPassword', password);
+          localStorage.setItem('rememberMe', 'true');
+          console.log('💾 Kullanıcı bilgileri hatırlandı');
+        } else {
+          // Beni hatırla kapalıysa temizle
+          localStorage.removeItem('rememberedUsername');
+          localStorage.removeItem('rememberedPassword');
+          localStorage.removeItem('rememberMe');
+          console.log('🗑️ Hatırlanan bilgiler temizlendi');
+        }
+        
         onLogin();
       } else {
         setError(result.message || 'Giriş başarısız');
@@ -89,6 +119,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   placeholder="Şifrenizi girin"
                   disabled={loading}
                 />
+              </div>
+            </div>
+
+            {/* Beni Hatırla */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="rememberMe"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                />
+                <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-600 cursor-pointer">
+                  Beni Hatırla
+                </label>
+              </div>
+              
+              <div className="text-sm">
+                <span className="text-gray-500">Güvenli giriş</span>
               </div>
             </div>
 
