@@ -674,14 +674,27 @@ export class OrderService {
   }
 
   static getPlatformLogo(type: string): string {
+    // Electron desktop app için doğru path
+    const isElectron = typeof window !== 'undefined' && window.electronAPI;
+    let basePath;
+    if (isElectron) {
+      // Desktop app için file:// protocol kullan
+      basePath = 'file://' + (process.env.NODE_ENV === 'development' 
+        ? process.cwd() + '/public/assets/images'
+        : __dirname + '/assets/images');
+    } else {
+      // Web browser için absolute path
+      basePath = '/assets/images';
+    }
+    
     const logoMap: { [key: string]: string } = {
-      'YEMEKSEPETI': '/assets/images/yemek-sepeti.png',
-      'TRENDYOL': '/assets/images/trendyollogo.png',
-      'MIGROS': '/assets/images/migros-yemek.png',
-      'GETIR': '/assets/images/getir.png'
+      'YEMEKSEPETI': `${basePath}/yemek-sepeti.png`,
+      'TRENDYOL': `${basePath}/trendyollogo.png`,
+      'MIGROS': `${basePath}/migros-yemek.png`,
+      'GETIR': `${basePath}/getir.png`
     };
-
-    return logoMap[type] || '/assets/images/logo.svg';
+    
+    return logoMap[type] || `${basePath}/logo.svg`;
   }
 
   static getOrderType(order: Order): string {

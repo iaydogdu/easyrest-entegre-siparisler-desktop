@@ -45,6 +45,15 @@ class Main {
     
     this.setupAutoUpdater();
     this.setupIpcHandlers();
+    
+    // Asset path handler
+    ipcMain.handle('get-asset-path', (event, relativePath) => {
+      if (isDev) {
+        return `http://localhost:3002/assets/${relativePath}`;
+      } else {
+        return path.join(__dirname, 'assets', relativePath);
+      }
+    });
   }
 
   createWindow() {
@@ -57,7 +66,8 @@ class Main {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        enableRemoteModule: false
+        enableRemoteModule: false,
+        preload: path.join(__dirname, 'preload.js')
       },
       icon: path.join(__dirname, 'assets/icons/icon.png'),
       titleBarStyle: 'default',
@@ -132,7 +142,7 @@ class Main {
               dialog.showMessageBox(this.mainWindow, {
                 type: 'info',
                 title: 'EasyRest Entegre Siparişler',
-                message: 'EasyRest Entegre Siparişler v1.0.1',
+                message: `EasyRest Entegre Siparişler v${app.getVersion()}`,
                 detail: 'React + Electron Desktop Uygulaması'
               });
             }

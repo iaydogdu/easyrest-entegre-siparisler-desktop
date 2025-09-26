@@ -241,7 +241,20 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     const initializeAudio = async () => {
       try {
         console.log('🔊 Ses sistemi başlatılıyor...');
-        const audioElement = new Audio('/assets/sounds/web.mp3');
+        // Electron desktop app için doğru path
+        const isElectron = window.electronAPI;
+        let audioPath;
+        if (isElectron) {
+          // Desktop app için file:// protocol kullan
+          audioPath = 'file://' + (process.env.NODE_ENV === 'development' 
+            ? process.cwd() + '/public/assets/sounds/web.mp3'
+            : __dirname + '/assets/sounds/web.mp3');
+        } else {
+          // Web browser için absolute path
+          audioPath = '/assets/sounds/web.mp3';
+        }
+        console.log('🔊 Ses dosyası path:', audioPath);
+        const audioElement = new Audio(audioPath);
         audioElement.volume = 0.7;
         audioElement.preload = 'auto';
         

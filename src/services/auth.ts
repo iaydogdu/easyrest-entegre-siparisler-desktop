@@ -52,11 +52,17 @@ export class AuthService {
           // Mağazaları kaydet
           localStorage.setItem('magazalar', JSON.stringify(userInfo.magaza || []));
           
-          // İlk mağazayı seç
-          if (userInfo.magaza && userInfo.magaza.length > 0) {
+          // Son seçilen mağazayı kontrol et, yoksa ilkini seç
+          const savedStore = localStorage.getItem('selectedStore');
+          const isValidStore = savedStore && userInfo.magaza.some(m => m._id === savedStore);
+          
+          if (!isValidStore && userInfo.magaza && userInfo.magaza.length > 0) {
             const firstStore = userInfo.magaza[0];
             localStorage.setItem('selectedStore', firstStore._id);
             console.log('✅ İlk mağaza seçildi:', firstStore.magazaAdi);
+          } else if (isValidStore) {
+            const selectedStore = userInfo.magaza.find(m => m._id === savedStore);
+            console.log('✅ Son seçilen mağaza korundu:', selectedStore?.magazaAdi);
           }
         }
         

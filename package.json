@@ -8,7 +8,7 @@
   "scripts": {
     "start": "set PORT=3002 && react-scripts start",
     "build": "react-scripts build",
-    "build:electron": "npm run build && copy public\\electron.js build\\electron.js && xcopy public\\assets build\\assets /E /I /Y",
+    "build:electron": "npm run build && copy public\\electron.js build\\electron.js && copy public\\preload.js build\\preload.js && xcopy public\\assets build\\assets /E /I /Y",
     "electron": "npm run build:electron && electron .",
     "electron:dev": "concurrently \"npm start\" \"wait-on http://localhost:3002 && electron .\"",
     "electron:build": "echo 'Electron build completed'",
