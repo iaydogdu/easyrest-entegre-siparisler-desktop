@@ -674,8 +674,17 @@ export class OrderService {
   }
 
   static getPlatformLogo(type: string): string {
-    // Basit fallback - resim sorununu daha sonra çözeriz
-    const basePath = '/assets/images';
+    // Electron desktop app için doğru path
+    const isElectron = typeof window !== 'undefined' && window.electronAPI;
+    let basePath;
+    if (isElectron) {
+      // Desktop app için resources path kullan
+      basePath = 'file:///C:/Program Files/easyrest-entegre-siparisler/resources/assets/images';
+    } else {
+      // Web browser için absolute path
+      basePath = '/assets/images';
+    }
+    
     const logoMap: { [key: string]: string } = {
       'YEMEKSEPETI': `${basePath}/yemek-sepeti.png`,
       'TRENDYOL': `${basePath}/trendyollogo.png`,

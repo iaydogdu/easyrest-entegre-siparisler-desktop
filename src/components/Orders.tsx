@@ -242,8 +242,16 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     const initializeAudio = async () => {
       try {
         console.log('🔊 Ses sistemi başlatılıyor...');
-        // Basit ses path - asset sorununu daha sonra çözeriz
-        const audioPath = '/assets/sounds/web.mp3';
+        // Electron desktop app için doğru path
+        const isElectron = window.electronAPI;
+        let audioPath;
+        if (isElectron) {
+          // Desktop app için resources path kullan
+          audioPath = 'file:///C:/Program Files/easyrest-entegre-siparisler/resources/assets/sounds/web.mp3';
+        } else {
+          // Web browser için absolute path
+          audioPath = '/assets/sounds/web.mp3';
+        }
         console.log('🔊 Ses dosyası path:', audioPath);
         const audioElement = new Audio(audioPath);
         audioElement.volume = 0.7;
