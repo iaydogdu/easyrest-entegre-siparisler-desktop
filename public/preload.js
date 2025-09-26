@@ -17,8 +17,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Asset paths için
   getAssetPath: (relativePath) => {
-    // Production'da app.getAppPath() + '/assets/' + relativePath
-    // Development'da localhost kullan
     return ipcRenderer.invoke('get-asset-path', relativePath);
   }
 });

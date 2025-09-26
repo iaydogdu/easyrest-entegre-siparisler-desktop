@@ -674,12 +674,12 @@ export class OrderService {
   }
 
   static getPlatformLogo(type: string): string {
-    // Electron desktop app için doğru path
+    // Electron desktop app için doğru path (URL encoding düzeltilmiş)
     const isElectron = typeof window !== 'undefined' && window.electronAPI;
     let basePath;
     if (isElectron) {
-      // Desktop app için resources path kullan
-      basePath = 'file:///C:/Program Files/easyrest-entegre-siparisler/resources/assets/images';
+      // Desktop app için resources path kullan (spaces için proper encoding)
+      basePath = 'file:///C:/Program%20Files/easyrest-entegre-siparisler/resources/assets/images';
     } else {
       // Web browser için absolute path
       basePath = '/assets/images';
