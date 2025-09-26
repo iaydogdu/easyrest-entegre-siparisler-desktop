@@ -14,10 +14,12 @@ import { Subscription, interval } from 'rxjs';
   selector: 'app-orders',
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, NgSelectModule],
-  template: `
-    <div class="modern-app">
-      <!-- Modern Header -->
-      <header class="modern-header">
+  templateUrl: './orders.component.html',
+  styleUrls: ['./orders.component.css']
+})
+export class OrdersComponent implements OnInit, OnDestroy {
+  // Component Properties
+  orders: Order[] = [];
         <div class="header-container">
           <!-- Logo ve Başlık -->
           <div class="brand-section">
@@ -2792,7 +2794,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   getCustomerName(order: Order): string {
-    if (!order?.rawData) return '';
+    if (!order?.rawData) return 'Müşteri Bilgisi Yok';
 
     let customerName = '';
 
@@ -2813,164 +2815,29 @@ export class OrdersComponent implements OnInit, OnDestroy {
           break;
           
         case 'MIGROS':
-          // 🔍 GELİŞMİŞ MİGROS MÜŞTERİ BİLGİSİ ALMA
-          customerName = this.getMigrosCustomerName(order);
+          if (order.rawData.customerInfo?.name) {
+            customerName = order.rawData.customerInfo.name;
+          } else if (order.rawData.customer) {
+            const customer: any = order.rawData.customer;
+            customerName = customer.fullName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+          }
           break;
           
         default:
-          console.warn(`⚠️ Bilinmeyen platform: ${order.type}`);
+          console.warn(`⚠️ Bilinmeyen platform için müşteri adı: ${order.type}`);
       }
 
       if (!customerName) {
         console.warn(`⚠️ Müşteri adı bulunamadı (${order.type}):`, this.getOrderId(order));
-        
-        // Debug için rawData'yı logla
-        if (order.type === 'MIGROS') {
-          this.debugMigrosCustomerData(order);
-        }
-        
         customerName = 'Müşteri Bilgisi Yok';
       }
 
     } catch (error) {
       console.error(`❌ Müşteri adı alma hatası (${order.type}):`, error, order);
-      customerName = 'Müşteri Bilgisi Hatası';
+      customerName = 'Hata: Müşteri Bilgisi';
     }
 
     return customerName;
-  }
-
-  // 🆕 Migros için özel müşteri adı alma metodu
-  private getMigrosCustomerName(order: Order): string {
-    const rawData: any = order.rawData;
-    
-    console.log('🔍 Migros müşteri bilgisi aranıyor...', {
-      orderId: rawData.orderId,
-      hasCustomerInfo: !!rawData.customerInfo,
-      hasCustomer: !!rawData.customer
-    });
-
-    // 1. ÖNCE customerInfo'dan dene
-    if (rawData.customerInfo?.name) {
-      console.log('✅ Migros müşteri adı customerInfo.name\'dan alındı:', rawData.customerInfo.name);
-      return rawData.customerInfo.name;
-    }
-    
-    // 2. SONRA customer objesi'nden dene
-    if (rawData.customer) {
-      const customer = rawData.customer;
-      
-      // fullName kontrolü
-      if (customer.fullName) {
-        console.log('✅ Migros müşteri adı customer.fullName\'dan alındı:', customer.fullName);
-        return customer.fullName;
-      }
-      
-      // firstName + lastName birleştir
-      const firstName = customer.firstName || '';
-      const lastName = customer.lastName || '';
-      const fullName = `${firstName} ${lastName}`.trim();
-      
-      if (fullName) {
-        console.log('✅ Migros müşteri adı firstName+lastName\'dan oluşturuldu:', fullName);
-        return fullName;
-      }
-      
-      // Diğer possible name field'ları
-      const possibleNames = [
-        customer.name,
-        customer.customerName,
-        customer.displayName,
-        customer.userName,
-        customer.recipientName
-      ].filter(Boolean);
-      
-      if (possibleNames.length > 0) {
-        console.log('✅ Migros müşteri adı alternatif field\'dan alındı:', possibleNames[0]);
-        return possibleNames[0];
-      }
-      
-      console.log('🔍 Customer objesi keys:', Object.keys(customer));
-    }
-
-    // 3. Root level'da müşteri bilgisi arama
-    const rootCustomerFields = [
-      'customerName',
-      'clientName', 
-      'buyerName',
-      'recipientName',
-      'deliveryRecipient',
-      'orderRecipient'
-    ];
-    
-    for (const field of rootCustomerFields) {
-      if (rawData[field]) {
-        console.log(`✅ Migros müşteri adı root.${field}\'dan alındı:`, rawData[field]);
-        return rawData[field];
-      }
-    }
-
-    // 4. Delivery address içinde name arama
-    if (rawData.deliveryAddress?.recipientName) {
-      console.log('✅ Migros müşteri adı deliveryAddress.recipientName\'dan alındı:', rawData.deliveryAddress.recipientName);
-      return rawData.deliveryAddress.recipientName;
-    }
-
-    console.error('❌ Migros müşteri adı hiçbir yerde bulunamadı!');
-    return '';
-  }
-
-  // 🔍 Debug helper metodu
-  private debugMigrosCustomerData(order: Order): void {
-    if (order.type !== 'MIGROS') return;
-    
-    const rawData: any = order.rawData;
-    
-    console.group('🔍 MIGROS MÜŞTERİ BİLGİSİ DEBUG');
-    
-    console.log('📋 Temel Bilgiler:', {
-      orderId: rawData.orderId,
-      platformConfirmationId: rawData.platformConfirmationId,
-      status: rawData.status
-    });
-    
-    console.log('👤 CustomerInfo:', {
-      exists: !!rawData.customerInfo,
-      name: rawData.customerInfo?.name,
-      phone: rawData.customerInfo?.phone,
-      email: rawData.customerInfo?.email,
-      keys: rawData.customerInfo ? Object.keys(rawData.customerInfo) : []
-    });
-    
-    console.log('👥 Customer:', {
-      exists: !!rawData.customer,
-      fullName: rawData.customer?.fullName,
-      firstName: rawData.customer?.firstName,
-      lastName: rawData.customer?.lastName,
-      name: rawData.customer?.name,
-      phoneNumber: rawData.customer?.phoneNumber,
-      keys: rawData.customer ? Object.keys(rawData.customer) : []
-    });
-    
-    console.log('🏠 Delivery Info:', {
-      hasDeliveryAddress: !!rawData.deliveryAddress,
-      recipientName: rawData.deliveryAddress?.recipientName,
-      deliveryRecipient: rawData.deliveryRecipient
-    });
-    
-    console.log('🔍 Müşteri ile ilgili tüm field\'lar:');
-    Object.keys(rawData).forEach(key => {
-      const lowerKey = key.toLowerCase();
-      if (lowerKey.includes('customer') || 
-          lowerKey.includes('client') || 
-          lowerKey.includes('buyer') || 
-          lowerKey.includes('recipient') ||
-          lowerKey.includes('name')) {
-        console.log(`  ${key}:`, rawData[key]);
-      }
-    });
-    
-    console.groupEnd();
   }
 
   getCustomerPhone(order: Order): string {

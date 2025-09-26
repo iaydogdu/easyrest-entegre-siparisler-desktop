@@ -143,6 +143,9 @@ export class LoginComponent implements OnInit {
           this.isLoading = false;
           
           if (response) {
+            console.log('Login response:', response);
+            console.log('Magazalar:', response.magazalar);
+            
             // Remember me işlemleri
             if (this.rememberMe) {
               localStorage.setItem('email2', this.kullaniciAdi);
@@ -154,8 +157,14 @@ export class LoginComponent implements OnInit {
               localStorage.removeItem('rememberMe');
             }
 
-            // Orders sayfasına yönlendir
-            this.router.navigate(['/orders']);
+            // LocalStorage'ı kontrol et
+            console.log('LocalStorage magazalar:', localStorage.getItem('magazalar'));
+
+            // Mağazaların yüklenmesini bekle, sonra yönlendir
+            setTimeout(() => {
+              console.log('Gecikmeli kontrol - LocalStorage magazalar:', localStorage.getItem('magazalar'));
+              this.router.navigate(['/orders']);
+            }, 2000);
           }
         }
       });

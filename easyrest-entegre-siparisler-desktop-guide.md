@@ -1627,11 +1627,14 @@ Uygulama otomatik güncelleme desteği ile gelir. GitHub Releases'ten yeni sür�
 - `PUT /api/banko/getOrderById` - Sipariş ID ile getir
 
 #### Trendyol API'leri:
-- `POST /api/trendyol-orders/sync/{storeId}` - Trendyol siparişleri sync
-- `GET /api/trendyol-orders-diger/{storeId}/iades` - Trendyol iadeleri
+- `POST /api/trendyol-orders/sync/{storeId}?packageStatuses=Created` - Trendyol siparişleri sync
+  - Örnek: `https://api.easycorest.com:5555/api/trendyol-orders/sync/676c048a029241c3076108f7?packageStatuses=Created`
+- `GET /api/trendyol-orders-diger/{storeId}/iades?size=100&storeId={saticiId}&createdStartDate={timestamp}&createdEndDate={timestamp}` - Trendyol iadeleri
+  - Örnek: `https://api.easycorest.com:5555/api/trendyol-orders-diger/676c048a029241c3076108f7/iades?size=100&storeId=1234&createdStartDate=1640995200000&createdEndDate=1641081600000`
 
 #### YemekSepeti API'leri:
-- `GET /api/yemeksepetideliveryhero/siparisRaporu` - YemekSepeti raporu
+- `GET /api/yemeksepetideliveryhero/siparisRaporu?status=cancelled&pastNumberOfHours=24` - YemekSepeti iptal raporu
+  - Örnek: `https://api.easycorest.com:5555/api/yemeksepetideliveryhero/siparisRaporu?status=cancelled&pastNumberOfHours=24`
 
 #### Kullanıcı API'leri:
 - `GET /api/user/settings` - Kullanıcı ayarları
@@ -1648,6 +1651,14 @@ Uygulama otomatik güncelleme desteği ile gelir. GitHub Releases'ten yeni sür�
 - "Beni Hatırla" özelliği
 - Otomatik logout
 - Role-based access control
+
+#### 🏪 Mağaza Yönetimi:
+- **Login'de mağaza listesi alma**: Login response'da `magazalar` array'i gelir
+- **LocalStorage'a kaydetme**: `localStorage.setItem('magazalar', JSON.stringify(response.magazalar))`
+- **İlk mağazayı otomatik seçme**: `localStorage.setItem('selectedStore', response.magazalar[0]._id)`
+- **Mağaza seçimi dropdown**: ng-select ile `bindLabel="magazaAdi"` ve `bindValue="_id"`
+- **Mağaza değişimi**: `onStoreChange()` metodu ile API'leri yeniden başlatır
+- **Mağaza ID formatı**: MongoDB ObjectId (24 karakter hex) örn: `676c048a029241c3076108f7`
 
 #### 📱 Desktop Features:
 - Electron-based desktop app
