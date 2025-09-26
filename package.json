@@ -1,6 +1,6 @@
 {
   "name": "easyrest-entegre-siparisler",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "EasyRest Entegre Siparişler Desktop Uygulaması",
   "main": "dist/main.js",
   "homepage": "./",
@@ -68,7 +68,6 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "autoprefixer": "^10.4.21",
-    "electron-updater": "^6.1.7",
     "postcss": "^8.5.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
@@ -86,7 +85,8 @@
     "@types/node": "^18.19.127",
     "concurrently": "^8.2.2",
     "electron": "^27.0.0",
-    "electron-builder": "^24.6.4",
+    "electron-builder": "^24.13.3",
+    "electron-updater": "^6.6.2",
     "typescript": "~5.2.0",
     "wait-on": "^7.2.0"
   },
