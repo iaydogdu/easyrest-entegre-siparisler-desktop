@@ -1,13 +1,13 @@
 {
   "name": "easyrest-entegre-siparisler",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "EasyRest Entegre Siparişler Desktop Uygulaması",
   "author": "EasyRest",
   "main": "build/electron.js",
   "homepage": "./",
   "scripts": {
     "start": "set PORT=3002 && react-scripts start",
-    "build": "react-scripts build",
+    "build": "set REACT_APP_VERSION=%npm_package_version% && react-scripts build",
     "build:electron": "npm run build && copy public\\electron.js build\\electron.js && copy public\\preload.js build\\preload.js && xcopy public\\assets build\\assets /E /I /Y",
     "electron": "npm run build:electron && electron .",
     "electron:dev": "concurrently \"npm start\" \"wait-on http://localhost:3002 && electron .\"",
@@ -28,6 +28,12 @@
       "public/electron.js",
       "node_modules/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/assets",
+        "to": "assets"
+      }
     ],
     "mac": {
       "category": "public.app-category.business",
