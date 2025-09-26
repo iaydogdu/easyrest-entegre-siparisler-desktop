@@ -51,7 +51,10 @@ class Main {
       if (isDev) {
         return `http://localhost:3002/assets/${relativePath}`;
       } else {
-        return path.join(__dirname, 'assets', relativePath);
+        // Production'da extraResources klasöründeki assets'i kullan
+        const resourcesPath = process.resourcesPath;
+        const assetPath = path.join(resourcesPath, 'assets', relativePath);
+        return `file://${assetPath.replace(/\\/g, '/')}`;
       }
     });
   }
@@ -191,7 +194,8 @@ class Main {
     autoUpdater.on('checking-for-update', () => {
       const logData = {
         currentVersion: app.getVersion(),
-        updateUrl: autoUpdater.getFeedURL()
+        updateUrl: 'https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases',
+        isDev: isDev
       };
       console.log('🔍 Güncellemeler kontrol ediliyor...', logData);
       
