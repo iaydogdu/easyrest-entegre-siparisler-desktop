@@ -1168,11 +1168,7 @@ Termal Yazdırma Sistemi
                             }, 1000);
                           }
                         }, 500); // 500ms'de bir güncelle
-                          
-                        } else {
-                          console.error('❌ Download URL bulunamadı');
-                          window.open(latestRelease.html_url, '_blank');
-                        }
+                        
                       } else {
                         console.log('⏭️ Güncelleme ertelendi');
                       }
