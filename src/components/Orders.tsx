@@ -1071,7 +1071,10 @@ Termal Yazdırma Sistemi
                     const response = await fetch('https://api.github.com/repos/iaydogdu/easyrest-entegre-siparisler-desktop/releases/latest');
                     const latestRelease = await response.json();
                     
-                    const currentVersion = '1.0.24'; // Hardcoded for test
+                    // Dynamic version al
+                    const currentVersion = window.electronAPI 
+                      ? await (window.electronAPI as any).getVersion() 
+                      : '1.0.25';
                     const latestVersion = latestRelease.tag_name.replace('v', '');
                     
                     console.log('📋 Version karşılaştırması:', {
