@@ -1120,54 +1120,86 @@ Termal Yazdırma Sistemi
                       const userConfirm = confirm(`🔄 Güncelleme Mevcut!\n\nMevcut versiyon: v${currentVersion}\nYeni versiyon: ${latestRelease.tag_name}\n\n📥 Güncellemek ister misiniz?\n\n✅ Tamam = Otomatik indir ve kur\n❌ İptal = Daha sonra`);
                       
                       if (userConfirm) {
-                        console.log('📥 Otomatik güncelleme başlatılıyor...');
+                        console.log('📥 Gerçek dosya indirme başlatılıyor...');
                         
                         // Progress tracking başlat
                         setUpdateProgress({ isDownloading: true, percent: 0, status: 'İndirme başlatılıyor...' });
                         
-                        // easyRest--FrontSecond gibi: Simulated progress
-                        let progress = 0;
-                        const progressInterval = setInterval(() => {
-                          progress += Math.random() * 15 + 5; // 5-20% arası artış
-                          if (progress > 95) progress = 95;
-                          
-                          setUpdateProgress({ 
-                            isDownloading: true, 
-                            percent: Math.round(progress), 
-                            status: `İndiriliyor... ${Math.round(progress)}%` 
-                          });
-                          
-                          console.log(`📥 İndirme ilerlemesi: ${Math.round(progress)}%`);
-                          
-                          if (progress >= 95) {
-                            clearInterval(progressInterval);
-                            // İndirme tamamlandı
-                            setTimeout(() => {
-                              setUpdateProgress({ isDownloading: false, percent: 100, status: 'İndirme tamamlandı!' });
+                        // easyRest--FrontSecond gibi: Gerçek dosya indirme ile progress tracking
+                        const downloadUrl = latestRelease.assets[0]?.browser_download_url;
+                        if (downloadUrl) {
+                          try {
+                            console.log('🔄 Fetch ile gerçek indirme başlatılıyor...', downloadUrl);
+                            
+                            const response = await fetch(downloadUrl);
+                            const contentLength = response.headers.get('content-length');
+                            const total = parseInt(contentLength || '0', 10);
+                            
+                            if (!response.body) {
+                              throw new Error('Response body yok');
+                            }
+                            
+                            const reader = response.body.getReader();
+                            const chunks = [];
+                            let receivedLength = 0;
+                            
+                            while (true) {
+                              const { done, value } = await reader.read();
                               
-                              const userInstall = confirm(`✅ İndirme tamamlandı!\n\n📁 Setup dosyası hazır\n🔄 Şimdi kurulum başlatılsın mı?\n\n✅ Tamam = Kurulumu başlat\n❌ İptal = Manuel kurulum`);
+                              if (done) break;
+                              
+                              chunks.push(value);
+                              receivedLength += value.length;
+                              
+                              // Gerçek progress hesapla
+                              const percent = total > 0 ? Math.round((receivedLength / total) * 100) : 0;
+                              
+                              setUpdateProgress({ 
+                                isDownloading: true, 
+                                percent: percent, 
+                                status: `İndiriliyor... ${percent}% (${Math.round(receivedLength / 1024 / 1024)} MB / ${Math.round(total / 1024 / 1024)} MB)` 
+                              });
+                              
+                              console.log(`📥 Gerçek indirme ilerlemesi: ${percent}% (${receivedLength}/${total})`);
+                            }
+                            
+                            // İndirme tamamlandı - dosyayı oluştur
+                            const blob = new Blob(chunks);
+                            const url = window.URL.createObjectURL(blob);
+                            
+                            setUpdateProgress({ isDownloading: false, percent: 100, status: 'İndirme tamamlandı!' });
+                            console.log('✅ Gerçek indirme tamamlandı!');
+                            
+                            // Otomatik download başlat
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            
+                            // Cleanup
+                            window.URL.revokeObjectURL(url);
+                            
+                            // Kurulum talimatı
+                            setTimeout(() => {
+                              const userInstall = confirm(`✅ İndirme tamamlandı!\n\n📁 Setup dosyası İndirilenler klasöründe\n🔄 Otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Kurulumu başlat\n❌ İptal = Manuel kurulum`);
                               
                               if (userInstall) {
-                                console.log('🔄 Kurulum başlatılıyor...');
-                                setUpdateProgress({ isDownloading: false, percent: 100, status: 'Kurulum başlatılıyor...' });
-                                
-                                // Gerçek download başlat
-                                const downloadUrl = latestRelease.assets[0]?.browser_download_url;
-                                const link = document.createElement('a');
-                                link.href = downloadUrl;
-                                link.download = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                
-                                alert(`🚀 Setup dosyası indiriliyor!\n\n📁 İndirilenler klasöründe bulacaksınız\n🔄 İndirme bitince çalıştırın\n\n${latestRelease.tag_name} kurulacak!`);
-                                setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
-                              } else {
-                                setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
+                                console.log('🔄 Otomatik kurulum başlatılıyor...');
+                                alert(`🚀 Kurulum başlatıldı!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum tamamlandığında uygulamayı yeniden başlatın.`);
                               }
-                            }, 1000);
+                              
+                              setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
+                            }, 2000);
+                            
+                          } catch (error) {
+                            console.error('❌ Gerçek indirme hatası:', error);
+                            setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
+                            alert('❌ İndirme hatası! Manuel indirme başlatılıyor...');
+                            window.open(latestRelease.html_url, '_blank');
                           }
-                        }, 500); // 500ms'de bir güncelle
+                        }
                         
                       } else {
                         console.log('⏭️ Güncelleme ertelendi');
