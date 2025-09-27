@@ -55,6 +55,12 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
 
     // Ana Angular projeden: Auto-updater test (basitleştirilmiş)
     console.log('🔄 Auto-updater sistemi aktif (Electron main process)');
+    
+    // ElectronAPI debug
+    if (window.electronAPI) {
+      console.log('🔍 ElectronAPI methods:', Object.keys(window.electronAPI));
+      console.log('🔍 checkForUpdates mevcut mu?', typeof (window.electronAPI as any).checkForUpdates);
+    }
 
     // Manual auto-updater test (development)
     if (process.env.NODE_ENV === 'development') {
