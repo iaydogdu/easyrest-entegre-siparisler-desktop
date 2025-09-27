@@ -29,12 +29,17 @@ class Main {
       
       // Uygulama başladıktan 10 saniye sonra güncellemeleri kontrol et (test için kısa)
       setTimeout(() => {
-        console.log('🔍 Update kontrolü başlatılıyor...');
+        console.log('🔍 Update kontrolü başlatılıyor...', {
+          currentVersion: app.getVersion(),
+          isPackaged: app.isPackaged,
+          isDev: isDev,
+          platform: process.platform
+        });
         autoUpdater.checkForUpdatesAndNotify();
       }, 10000);
       
-      // Development'ta 1 dakikada bir, production'da 4 saatte bir
-      const interval = isDev ? 60000 : 4 * 60 * 60 * 1000;
+      // Development'ta 1 dakikada bir, production'da da 1 dakikada bir (test için)
+      const interval = 60000; // 1 dakika
       setInterval(() => {
         console.log('⏰ Scheduled update check...');
         autoUpdater.checkForUpdatesAndNotify();
