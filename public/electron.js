@@ -243,6 +243,11 @@ class Main {
     autoUpdater.on('update-available', (info) => {
       console.log('Güncelleme mevcut:', info);
       
+      // React console'a da gönder
+      this.mainWindow.webContents.executeJavaScript(`
+        console.log('🆕 [ELECTRON] Güncelleme mevcut!', ${JSON.stringify(info)});
+      `);
+      
       // Native notification göster
       if (Notification.isSupported()) {
         new Notification({
@@ -275,16 +280,29 @@ class Main {
     });
 
     autoUpdater.on('update-not-available', (info) => {
-      console.log('📭 Güncelleme mevcut değil:', {
+      const logData = {
         currentVersion: app.getVersion(),
         latestVersion: info.version,
-        updateUrl: autoUpdater.getFeedURL()
-      });
+        updateUrl: 'https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases'
+      };
+      console.log('📭 Güncelleme mevcut değil:', logData);
+      
+      // React console'a da gönder
+      this.mainWindow.webContents.executeJavaScript(`
+        console.log('📭 [ELECTRON] Güncelleme mevcut değil:', ${JSON.stringify(logData)});
+      `);
+      
       this.sendToRenderer('update-status', { status: 'not-available' });
     });
 
     autoUpdater.on('error', (err) => {
       console.error('Auto updater hatası:', err);
+      
+      // React console'a da gönder
+      this.mainWindow.webContents.executeJavaScript(`
+        console.error('❌ [ELECTRON] Auto updater hatası:', '${err.message}');
+      `);
+      
       this.sendToRenderer('update-status', { status: 'error', error: err.message });
     });
 
