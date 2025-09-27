@@ -242,12 +242,12 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     const initializeAudio = async () => {
       try {
         console.log('🔊 Ses sistemi başlatılıyor...');
-        // Electron desktop app için doğru path (URL encoding düzeltilmiş)
+        // Electron desktop app için dynamic path
         const isElectron = window.electronAPI;
         let audioPath;
-        if (isElectron) {
-          // Desktop app için resources path kullan (spaces için proper encoding)
-          audioPath = 'file:///C:/Program%20Files/easyrest-entegre-siparisler/resources/assets/sounds/web.mp3';
+        if (isElectron && (window.electronAPI as any).getAssetPath) {
+          // Electron'dan dynamic asset path al
+          audioPath = await (window.electronAPI as any).getAssetPath('sounds/web.mp3');
         } else {
           // Web browser için absolute path
           audioPath = '/assets/sounds/web.mp3';

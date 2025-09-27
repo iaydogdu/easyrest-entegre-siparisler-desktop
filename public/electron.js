@@ -54,7 +54,9 @@ class Main {
         // Production'da extraResources klasöründeki assets'i kullan
         const resourcesPath = process.resourcesPath;
         const assetPath = path.join(resourcesPath, 'assets', relativePath);
-        return `file://${assetPath.replace(/\\/g, '/')}`;
+        const fileUrl = `file:///${assetPath.replace(/\\/g, '/')}`;
+        console.log('📁 Asset path:', assetPath, '-> URL:', fileUrl);
+        return fileUrl;
       }
     });
   }

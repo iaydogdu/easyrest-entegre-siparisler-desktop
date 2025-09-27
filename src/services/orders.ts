@@ -673,26 +673,49 @@ export class OrderService {
     return `Durum: ${status}`;
   }
 
+  // Logo cache for async loading
+  private static logoCache: { [key: string]: string } = {};
+
   static getPlatformLogo(type: string): string {
-    // Electron desktop app için doğru path (URL encoding düzeltilmiş)
+    // Cache'den varsa döndür
+    if (this.logoCache[type]) {
+      return this.logoCache[type];
+    }
+
+    // Electron desktop app için dynamic path
     const isElectron = typeof window !== 'undefined' && window.electronAPI;
-    let basePath;
-    if (isElectron) {
-      // Desktop app için resources path kullan (spaces için proper encoding)
-      basePath = 'file:///C:/Program%20Files/easyrest-entegre-siparisler/resources/assets/images';
+    if (isElectron && (window.electronAPI as any).getAssetPath) {
+      // Async olarak yükle ve cache'le
+      const logoFiles: { [key: string]: string } = {
+        'YEMEKSEPETI': 'images/yemek-sepeti.png',
+        'TRENDYOL': 'images/trendyollogo.png',
+        'MIGROS': 'images/migros-yemek.png',
+        'GETIR': 'images/getir.png'
+      };
+      
+      const logoFile = logoFiles[type] || 'images/logo.svg';
+      (window.electronAPI as any).getAssetPath(logoFile).then((path: string) => {
+        this.logoCache[type] = path;
+        // Force re-render by triggering a custom event
+        window.dispatchEvent(new CustomEvent('logo-loaded', { detail: { type, path } }));
+      });
+      
+      // Fallback olarak default logo döndür
+      return '/assets/images/logo.svg';
     } else {
       // Web browser için absolute path
-      basePath = '/assets/images';
+      const basePath = '/assets/images';
+      const logoMap: { [key: string]: string } = {
+        'YEMEKSEPETI': `${basePath}/yemek-sepeti.png`,
+        'TRENDYOL': `${basePath}/trendyollogo.png`,
+        'MIGROS': `${basePath}/migros-yemek.png`,
+        'GETIR': `${basePath}/getir.png`
+      };
+      
+      const logoPath = logoMap[type] || `${basePath}/logo.svg`;
+      this.logoCache[type] = logoPath;
+      return logoPath;
     }
-    
-    const logoMap: { [key: string]: string } = {
-      'YEMEKSEPETI': `${basePath}/yemek-sepeti.png`,
-      'TRENDYOL': `${basePath}/trendyollogo.png`,
-      'MIGROS': `${basePath}/migros-yemek.png`,
-      'GETIR': `${basePath}/getir.png`
-    };
-    
-    return logoMap[type] || `${basePath}/logo.svg`;
   }
 
   static getOrderType(order: Order): string {
