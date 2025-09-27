@@ -160,10 +160,13 @@ class Main {
           },
           {
             label: 'Güncelleme Kontrol Et',
+            accelerator: 'F5',
             click: () => {
               if (autoUpdater) {
                 console.log('🔍 Manuel güncelleme kontrolü başlatılıyor...');
                 autoUpdater.checkForUpdatesAndNotify();
+              } else {
+                console.warn('⚠️ Auto-updater mevcut değil!');
               }
             }
           },
@@ -195,6 +198,9 @@ class Main {
 
     const menu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(menu);
+    
+    // Menu'nun görünür olduğunu kontrol et
+    console.log('📋 Menu oluşturuldu:', template.length, 'item');
   }
 
   setupAutoUpdater() {
