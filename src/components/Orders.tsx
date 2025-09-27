@@ -1182,12 +1182,34 @@ Termal Yazdırma Sistemi
                             window.URL.revokeObjectURL(url);
                             
                             // Kurulum talimatı
-                            setTimeout(() => {
+                            setTimeout(async () => {
                               const userInstall = confirm(`✅ İndirme tamamlandı!\n\n📁 Setup dosyası İndirilenler klasöründe\n🔄 Otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Kurulumu başlat\n❌ İptal = Manuel kurulum`);
                               
                               if (userInstall) {
                                 console.log('🔄 Otomatik kurulum başlatılıyor...');
-                                alert(`🚀 Kurulum başlatıldı!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum tamamlandığında uygulamayı yeniden başlatın.`);
+                                
+                                // Gerçek kurulum başlat
+                                if (window.electronAPI && (window.electronAPI as any).executeFile) {
+                                  try {
+                                    const downloadsPath = `C:\\Users\\${process.env.USERNAME || 'User'}\\Downloads\\EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                                    console.log('🔄 Setup dosyası çalıştırılıyor:', downloadsPath);
+                                    
+                                    const result = await (window.electronAPI as any).executeFile(downloadsPath);
+                                    
+                                    if (result.success) {
+                                      console.log('✅ Kurulum başarıyla başlatıldı!');
+                                      alert(`🚀 Kurulum başlatıldı!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum wizard'ı açıldı.`);
+                                    } else {
+                                      console.error('❌ Kurulum başlatma hatası:', result.error);
+                                      alert(`❌ Kurulum başlatılamadı!\n\nManuel olarak çalıştırın:\n${downloadsPath}`);
+                                    }
+                                  } catch (error) {
+                                    console.error('❌ executeFile hatası:', error);
+                                    alert('❌ Kurulum başlatılamadı! Manuel olarak İndirilenler klasöründeki setup dosyasını çalıştırın.');
+                                  }
+                                } else {
+                                  alert('📁 Manuel kurulum: İndirilenler klasöründeki setup dosyasını çalıştırın.');
+                                }
                               }
                               
                               setUpdateProgress({ isDownloading: false, percent: 0, status: '' });

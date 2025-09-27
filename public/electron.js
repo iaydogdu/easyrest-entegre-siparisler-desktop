@@ -423,6 +423,19 @@ class Main {
     ipcMain.handle('open-external', (event, url) => {
       shell.openExternal(url);
     });
+
+    // Execute file handler
+    ipcMain.handle('execute-file', async (event, filePath) => {
+      try {
+        console.log('🔄 Dosya çalıştırılıyor:', filePath);
+        const result = await shell.openPath(filePath);
+        console.log('✅ Dosya çalıştırma sonucu:', result);
+        return { success: true, result };
+      } catch (error) {
+        console.error('❌ Dosya çalıştırma hatası:', error);
+        return { success: false, error: error.message };
+      }
+    });
   }
 
   sendToRenderer(channel, data) {
