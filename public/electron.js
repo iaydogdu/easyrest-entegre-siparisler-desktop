@@ -340,6 +340,15 @@ class Main {
     ipcMain.handle('check-for-updates', () => {
       if (autoUpdater) {
         console.log('🔍 IPC: Manual update check triggered');
+        
+        // Timeout ekle - 30 saniye sonra force log
+        setTimeout(() => {
+          this.mainWindow.webContents.executeJavaScript(`
+            console.warn('⏰ [ELECTRON] Auto-updater timeout - 30 saniye geçti, response yok!');
+            console.log('🔗 [ELECTRON] GitHub releases kontrol et: https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases');
+          `);
+        }, 30000);
+        
         autoUpdater.checkForUpdatesAndNotify();
       }
       return { status: 'checking' };
