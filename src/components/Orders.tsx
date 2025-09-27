@@ -1054,6 +1054,28 @@ Termal Yazdırma Sistemi
                   <div className="text-xs opacity-75">{loading ? 'Yükleniyor' : 'Hazır'}</div>
                 </div>
               </div>
+
+              {/* Update Check Control */}
+              <div 
+                onClick={() => {
+                  console.log('🔍 Manuel update check başlatılıyor...');
+                  if (window.electronAPI) {
+                    console.log('📋 Electron API mevcut, update check çağrılıyor...');
+                    // Electron'a update check sinyali gönder
+                    window.electronAPI.showNotification('Update Check', 'Güncellemeler kontrol ediliyor...');
+                  } else {
+                    console.warn('⚠️ Electron API mevcut değil!');
+                  }
+                }}
+                className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-all duration-200 cursor-pointer">
+                <span className="material-icons text-lg">
+                  system_update
+                </span>
+                <div className="text-sm">
+                  <div className="font-medium">Update</div>
+                  <div className="text-xs opacity-75">Kontrol Et</div>
+                </div>
+              </div>
               
               {/* User Info & Logout */}
               <div className="flex items-center gap-3 ml-2">

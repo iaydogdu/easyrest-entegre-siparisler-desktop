@@ -164,9 +164,18 @@ class Main {
             click: () => {
               if (autoUpdater) {
                 console.log('🔍 Manuel güncelleme kontrolü başlatılıyor...');
+                // React console'a da gönder
+                this.mainWindow.webContents.executeJavaScript(`
+                  console.log('🔍 [ELECTRON] Manuel güncelleme kontrolü başlatılıyor...');
+                  console.log('📋 [ELECTRON] Current version: ${app.getVersion()}');
+                  console.log('🔗 [ELECTRON] GitHub URL: https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases');
+                `);
                 autoUpdater.checkForUpdatesAndNotify();
               } else {
                 console.warn('⚠️ Auto-updater mevcut değil!');
+                this.mainWindow.webContents.executeJavaScript(`
+                  console.error('❌ [ELECTRON] Auto-updater mevcut değil!');
+                `);
               }
             }
           },
@@ -218,16 +227,15 @@ class Main {
       const logData = {
         currentVersion: app.getVersion(),
         updateUrl: 'https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases',
-        isDev: isDev
+        isDev: isDev,
+        isPackaged: isPackaged
       };
       console.log('🔍 Güncellemeler kontrol ediliyor...', logData);
       
       // React console'a da gönder
-      this.sendToRenderer('console-log', {
-        type: 'log',
-        message: '🔍 Auto-updater: Güncellemeler kontrol ediliyor...',
-        data: logData
-      });
+      this.mainWindow.webContents.executeJavaScript(`
+        console.log('🔍 [ELECTRON] Güncellemeler kontrol ediliyor...', ${JSON.stringify(logData)});
+      `);
       
       this.sendToRenderer('update-status', { status: 'checking' });
     });

@@ -9,8 +9,9 @@ try {
   console.warn('Auto-updater yüklenemedi:', error.message);
 }
 
-// Development ortamını kontrol et
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+// Development ortamını kontrol et - sadece NODE_ENV kontrol et
+const isDev = process.env.NODE_ENV === 'development';
+const isPackaged = app.isPackaged;
 
 class Main {
   constructor() {
@@ -23,9 +24,9 @@ class Main {
     app.on('window-all-closed', this.onWindowAllClosed.bind(this));
     app.on('activate', this.onActivate.bind(this));
 
-    // Auto updater events - development'ta da test edelim
+    // Auto updater events - her zaman çalıştır (test için)
     if (autoUpdater) {
-      console.log('🔄 Auto-updater başlatılıyor...', { isDev, version: app.getVersion() });
+      console.log('🔄 Auto-updater başlatılıyor...', { isDev, isPackaged, version: app.getVersion() });
       
       // Uygulama başladıktan 10 saniye sonra güncellemeleri kontrol et (test için kısa)
       setTimeout(() => {
@@ -92,8 +93,8 @@ class Main {
     
     this.mainWindow.loadURL(startUrl);
 
-    // Development'ta DevTools aç
-    if (isDev) {
+    // Development'ta DevTools aç - packaged uygulamada kapalı
+    if (isDev && !isPackaged) {
       this.mainWindow.webContents.openDevTools();
       
       // Auto-updater loglarını React console'a da gönder
@@ -157,6 +158,27 @@ class Main {
               });
             }
           },
+          {
+            label: 'Güncelleme Kontrol Et',
+            accelerator: 'F5',
+            click: () => {
+              if (autoUpdater) {
+                console.log('🔍 Manuel güncelleme kontrolü başlatılıyor...');
+                // React console'a da gönder
+                this.mainWindow.webContents.executeJavaScript(`
+                  console.log('🔍 [ELECTRON] Manuel güncelleme kontrolü başlatılıyor...');
+                  console.log('📋 [ELECTRON] Current version: ${app.getVersion()}');
+                  console.log('🔗 [ELECTRON] GitHub URL: https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases');
+                `);
+                autoUpdater.checkForUpdatesAndNotify();
+              } else {
+                console.warn('⚠️ Auto-updater mevcut değil!');
+                this.mainWindow.webContents.executeJavaScript(`
+                  console.error('❌ [ELECTRON] Auto-updater mevcut değil!');
+                `);
+              }
+            }
+          },
           { type: 'separator' },
           {
             label: 'Çıkış',
@@ -185,6 +207,9 @@ class Main {
 
     const menu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(menu);
+    
+    // Menu'nun görünür olduğunu kontrol et
+    console.log('📋 Menu oluşturuldu:', template.length, 'item');
   }
 
   setupAutoUpdater() {
@@ -202,16 +227,15 @@ class Main {
       const logData = {
         currentVersion: app.getVersion(),
         updateUrl: 'https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases',
-        isDev: isDev
+        isDev: isDev,
+        isPackaged: isPackaged
       };
       console.log('🔍 Güncellemeler kontrol ediliyor...', logData);
       
       // React console'a da gönder
-      this.sendToRenderer('console-log', {
-        type: 'log',
-        message: '🔍 Auto-updater: Güncellemeler kontrol ediliyor...',
-        data: logData
-      });
+      this.mainWindow.webContents.executeJavaScript(`
+        console.log('🔍 [ELECTRON] Güncellemeler kontrol ediliyor...', ${JSON.stringify(logData)});
+      `);
       
       this.sendToRenderer('update-status', { status: 'checking' });
     });
