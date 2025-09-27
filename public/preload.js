@@ -18,5 +18,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Asset paths için
   getAssetPath: (relativePath) => {
     return ipcRenderer.invoke('get-asset-path', relativePath);
-  }
+  },
+  
+  // Auto-updater controls
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update')
 });
