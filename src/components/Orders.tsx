@@ -1072,9 +1072,17 @@ Termal Yazdırma Sistemi
                     const latestRelease = await response.json();
                     
                     // Dynamic version al
-                    const currentVersion = window.electronAPI 
-                      ? await (window.electronAPI as any).getVersion() 
-                      : '1.0.25';
+                    let currentVersion = '1.0.26'; // Fallback
+                    try {
+                      if (window.electronAPI && (window.electronAPI as any).getVersion) {
+                        currentVersion = await (window.electronAPI as any).getVersion();
+                        console.log('📋 Electron version alındı:', currentVersion);
+                      } else {
+                        console.warn('⚠️ Electron getVersion mevcut değil, fallback kullanılıyor');
+                      }
+                    } catch (error) {
+                      console.error('❌ Version alma hatası:', error);
+                    }
                     const latestVersion = latestRelease.tag_name.replace('v', '');
                     
                     console.log('📋 Version karşılaştırması:', {
@@ -1083,12 +1091,22 @@ Termal Yazdırma Sistemi
                       downloadUrl: latestRelease.assets[0]?.browser_download_url
                     });
                     
-                    if (latestVersion !== currentVersion) {
+                    // Version comparison - numeric comparison
+                    const currentVersionNum = parseFloat(currentVersion);
+                    const latestVersionNum = parseFloat(latestVersion);
+                    
+                    console.log('🔢 Version numeric comparison:', {
+                      currentNum: currentVersionNum,
+                      latestNum: latestVersionNum,
+                      isNewer: latestVersionNum > currentVersionNum
+                    });
+                    
+                    if (latestVersionNum > currentVersionNum) {
                       console.log('🆕 Yeni versiyon mevcut!', latestRelease.tag_name);
-                      alert(`Yeni versiyon mevcut: ${latestRelease.tag_name}\n\nİndirme: ${latestRelease.html_url}`);
+                      alert(`🚀 Yeni versiyon mevcut!\n\nMevcut: v${currentVersion}\nYeni: ${latestRelease.tag_name}\n\nİndirme: ${latestRelease.html_url}`);
                     } else {
                       console.log('📭 Güncelleme mevcut değil');
-                      alert('Güncelleme mevcut değil. En son versiyonu kullanıyorsunuz.');
+                      alert(`✅ En son versiyonu kullanıyorsunuz!\n\nMevcut: v${currentVersion}\nSon: ${latestRelease.tag_name}`);
                     }
                     
                   } catch (error) {
