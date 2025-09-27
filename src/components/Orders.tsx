@@ -1135,10 +1135,29 @@ Termal Yazdırma Sistemi
                           
                           console.log('✅ İndirme başlatıldı!');
                           
-                          // 5 saniye sonra kurulum talimatı
+                          // 3 saniye sonra otomatik kurulum başlat
                           setTimeout(() => {
-                            alert(`✅ İndirme tamamlandı!\n\n📁 İndirilenler klasörünü kontrol edin\n🔄 Setup dosyasını çalıştırın\n\n${latestRelease.tag_name} kurulacak!`);
-                          }, 5000);
+                            const userInstall = confirm(`✅ İndirme tamamlandı!\n\n📁 Setup dosyası indirildi\n🔄 Şimdi otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Kurulumu başlat\n❌ İptal = Manuel kurulum`);
+                            
+                            if (userInstall) {
+                              console.log('🔄 Otomatik kurulum başlatılıyor...');
+                              
+                              // Electron ile setup dosyasını çalıştır
+                              if (window.electronAPI && (window.electronAPI as any).openExternal) {
+                                const setupFileName = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                                const downloadsPath = `file:///C:/Users/${navigator.userAgent.includes('Windows') ? process.env.USERNAME || 'User' : 'User'}/Downloads/${setupFileName}`;
+                                
+                                console.log('🔄 Setup dosyası çalıştırılıyor:', setupFileName);
+                                (window.electronAPI as any).openExternal(downloadsPath);
+                                
+                                alert(`🚀 Kurulum başlatıldı!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum tamamlandığında uygulamayı yeniden başlatın.`);
+                              } else {
+                                alert(`📁 Manuel kurulum:\n\nİndirilenler klasöründeki setup dosyasını çalıştırın:\n${downloadUrl.split('/').pop()}`);
+                              }
+                            } else {
+                              alert('📁 Manuel kurulum için İndirilenler klasörünü kontrol edin.');
+                            }
+                          }, 3000);
                           
                         } else {
                           console.error('❌ Download URL bulunamadı');
