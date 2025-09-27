@@ -1064,18 +1064,33 @@ Termal Yazdırma Sistemi
               {/* Update Check Control */}
               <div 
                 onClick={async () => {
-                  console.log('🔍 Manuel update check başlatılıyor...');
-                  if (window.electronAPI) {
-                    console.log('📋 Electron API mevcut, update check çağrılıyor...');
-                    try {
-                      // Direkt update check çağır
-                      const result = await (window.electronAPI as any).checkForUpdates();
-                      console.log('✅ Update check sonucu:', result);
-                    } catch (error) {
-                      console.error('❌ Update check hatası:', error);
+                  console.log('🔍 Custom update check başlatılıyor...');
+                  
+                  try {
+                    // GitHub API ile latest release kontrol et
+                    const response = await fetch('https://api.github.com/repos/iaydogdu/easyrest-entegre-siparisler-desktop/releases/latest');
+                    const latestRelease = await response.json();
+                    
+                    const currentVersion = '1.0.24'; // Hardcoded for test
+                    const latestVersion = latestRelease.tag_name.replace('v', '');
+                    
+                    console.log('📋 Version karşılaştırması:', {
+                      current: currentVersion,
+                      latest: latestVersion,
+                      downloadUrl: latestRelease.assets[0]?.browser_download_url
+                    });
+                    
+                    if (latestVersion !== currentVersion) {
+                      console.log('🆕 Yeni versiyon mevcut!', latestRelease.tag_name);
+                      alert(`Yeni versiyon mevcut: ${latestRelease.tag_name}\n\nİndirme: ${latestRelease.html_url}`);
+                    } else {
+                      console.log('📭 Güncelleme mevcut değil');
+                      alert('Güncelleme mevcut değil. En son versiyonu kullanıyorsunuz.');
                     }
-                  } else {
-                    console.warn('⚠️ Electron API mevcut değil!');
+                    
+                  } catch (error) {
+                    console.error('❌ Custom update check hatası:', error);
+                    alert('Güncelleme kontrolü başarısız: ' + error);
                   }
                 }}
                 className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-all duration-200 cursor-pointer">
