@@ -1091,11 +1091,18 @@ Termal Yazdırma Sistemi
                       downloadUrl: latestRelease.assets[0]?.browser_download_url
                     });
                     
-                    // Version comparison - numeric comparison
-                    const currentVersionNum = parseFloat(currentVersion);
-                    const latestVersionNum = parseFloat(latestVersion);
+                    // Version comparison - proper semantic version comparison
+                    const parseVersion = (version: string) => {
+                      const parts = version.split('.').map(Number);
+                      return parts[0] * 10000 + parts[1] * 100 + (parts[2] || 0);
+                    };
                     
-                    console.log('🔢 Version numeric comparison:', {
+                    const currentVersionNum = parseVersion(currentVersion);
+                    const latestVersionNum = parseVersion(latestVersion);
+                    
+                    console.log('🔢 Version semantic comparison:', {
+                      current: currentVersion,
+                      latest: latestVersion,
                       currentNum: currentVersionNum,
                       latestNum: latestVersionNum,
                       isNewer: latestVersionNum > currentVersionNum
