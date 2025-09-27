@@ -1,6 +1,6 @@
 {
   "name": "easyrest-entegre-siparisler",
-  "version": "1.0.45",
+  "version": "1.0.46",
   "description": "EasyRest Entegre Siparişler Desktop Uygulaması",
   "author": "EasyRest",
   "main": "build/electron.js",
@@ -11,7 +11,7 @@
     "build:electron": "npm run build && copy public\\electron.js build\\electron.js && copy public\\preload.js build\\preload.js && xcopy public\\assets build\\assets /E /I /Y",
     "electron": "npm run build:electron && electron .",
     "electron:dev": "concurrently \"npm start\" \"wait-on http://localhost:3002 && electron .\"",
-    "electron:build": "echo 'Electron build completed'",
+    "electron:build": "npm run build:electron",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "release": "electron-builder --publish=always",
@@ -54,7 +54,10 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EasyRest Entegre Siparişler"
     }
   },
   "dependencies": {

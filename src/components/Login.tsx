@@ -173,7 +173,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           {/* Footer */}
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500">
-              EasyRest Desktop v{process.env.REACT_APP_VERSION || '1.0.45'} - {new Date().getFullYear()} - AUTO-INSTALL MASTER! 🏆🔥
+              EasyRest Desktop v{process.env.REACT_APP_VERSION || '1.0.46'} - {new Date().getFullYear()} - FULL AUTO-UPDATE SYSTEM! 🚀⚡
             </p>
           </div>
         </div>
