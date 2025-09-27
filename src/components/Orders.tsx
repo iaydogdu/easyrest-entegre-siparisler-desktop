@@ -1057,12 +1057,17 @@ Termal Yazdırma Sistemi
 
               {/* Update Check Control */}
               <div 
-                onClick={() => {
+                onClick={async () => {
                   console.log('🔍 Manuel update check başlatılıyor...');
                   if (window.electronAPI) {
                     console.log('📋 Electron API mevcut, update check çağrılıyor...');
-                    // Electron'a update check sinyali gönder
-                    window.electronAPI.showNotification('Update Check', 'Güncellemeler kontrol ediliyor...');
+                    try {
+                      // Direkt update check çağır
+                      const result = await (window.electronAPI as any).checkForUpdates();
+                      console.log('✅ Update check sonucu:', result);
+                    } catch (error) {
+                      console.error('❌ Update check hatası:', error);
+                    }
                   } else {
                     console.warn('⚠️ Electron API mevcut değil!');
                   }

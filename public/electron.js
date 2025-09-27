@@ -320,7 +320,8 @@ class Main {
   setupIpcHandlers() {
     // Manual update check
     ipcMain.handle('check-for-updates', () => {
-      if (!isDev && autoUpdater) {
+      if (autoUpdater) {
+        console.log('🔍 IPC: Manual update check triggered');
         autoUpdater.checkForUpdatesAndNotify();
       }
       return { status: 'checking' };
@@ -328,7 +329,7 @@ class Main {
 
     // Download update
     ipcMain.handle('download-update', () => {
-      if (!isDev && autoUpdater) {
+      if (autoUpdater) {
         autoUpdater.downloadUpdate();
       }
       return { status: 'downloading' };
@@ -336,10 +337,51 @@ class Main {
 
     // Install update
     ipcMain.handle('install-update', () => {
-      if (!isDev && autoUpdater) {
+      if (autoUpdater) {
         autoUpdater.quitAndInstall();
       }
       return { status: 'installing' };
+    });
+
+    // Show notification handler
+    ipcMain.handle('show-notification', (event, title, body) => {
+      console.log('📢 Notification:', title, body);
+      if (Notification.isSupported()) {
+        new Notification({
+          title: title,
+          body: body
+        }).show();
+      }
+      return { status: 'shown' };
+    });
+
+    // Get version
+    ipcMain.handle('get-version', () => {
+      return app.getVersion();
+    });
+
+    // Window controls
+    ipcMain.handle('minimize', () => {
+      if (this.mainWindow) this.mainWindow.minimize();
+    });
+
+    ipcMain.handle('maximize', () => {
+      if (this.mainWindow) {
+        if (this.mainWindow.isMaximized()) {
+          this.mainWindow.unmaximize();
+        } else {
+          this.mainWindow.maximize();
+        }
+      }
+    });
+
+    ipcMain.handle('close', () => {
+      if (this.mainWindow) this.mainWindow.close();
+    });
+
+    // External links
+    ipcMain.handle('open-external', (event, url) => {
+      shell.openExternal(url);
     });
   }
 
