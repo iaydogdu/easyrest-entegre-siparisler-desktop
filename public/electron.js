@@ -9,8 +9,9 @@ try {
   console.warn('Auto-updater yüklenemedi:', error.message);
 }
 
-// Development ortamını kontrol et
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+// Development ortamını kontrol et - sadece NODE_ENV kontrol et
+const isDev = process.env.NODE_ENV === 'development';
+const isPackaged = app.isPackaged;
 
 class Main {
   constructor() {
@@ -23,9 +24,9 @@ class Main {
     app.on('window-all-closed', this.onWindowAllClosed.bind(this));
     app.on('activate', this.onActivate.bind(this));
 
-    // Auto updater events - development'ta da test edelim
+    // Auto updater events - her zaman çalıştır (test için)
     if (autoUpdater) {
-      console.log('🔄 Auto-updater başlatılıyor...', { isDev, version: app.getVersion() });
+      console.log('🔄 Auto-updater başlatılıyor...', { isDev, isPackaged, version: app.getVersion() });
       
       // Uygulama başladıktan 10 saniye sonra güncellemeleri kontrol et (test için kısa)
       setTimeout(() => {
@@ -92,8 +93,8 @@ class Main {
     
     this.mainWindow.loadURL(startUrl);
 
-    // Development'ta DevTools aç
-    if (isDev) {
+    // Development'ta DevTools aç - packaged uygulamada kapalı
+    if (isDev && !isPackaged) {
       this.mainWindow.webContents.openDevTools();
       
       // Auto-updater loglarını React console'a da gönder
@@ -155,6 +156,15 @@ class Main {
                 message: `EasyRest Entegre Siparişler v${app.getVersion()}`,
                 detail: 'React + Electron Desktop Uygulaması'
               });
+            }
+          },
+          {
+            label: 'Güncelleme Kontrol Et',
+            click: () => {
+              if (autoUpdater) {
+                console.log('🔍 Manuel güncelleme kontrolü başlatılıyor...');
+                autoUpdater.checkForUpdatesAndNotify();
+              }
             }
           },
           { type: 'separator' },
