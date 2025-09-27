@@ -219,8 +219,8 @@ class Main {
       return;
     }
 
-    // Auto updater konfigürasyonu
-    autoUpdater.autoDownload = false; // Otomatik indirme kapalı
+    // Auto updater konfigürasyonu - easyRest--FrontSecond gibi
+    autoUpdater.autoDownload = true; // Otomatik indirme açık
     autoUpdater.autoInstallOnAppQuit = true; // Uygulama kapanırken otomatik yükle
 
     autoUpdater.on('checking-for-update', () => {
@@ -307,10 +307,23 @@ class Main {
     });
 
     autoUpdater.on('download-progress', (progressObj) => {
-      console.log(`İndirme ilerlemesi: ${Math.round(progressObj.percent)}%`);
+      const percent = Math.round(progressObj.percent);
+      console.log(`İndirme ilerlemesi: ${percent}%`);
+      
+      // React console'a da gönder
+      this.mainWindow.webContents.executeJavaScript(`
+        console.log('📥 [ELECTRON] İndirme ilerlemesi: ${percent}%', {
+          transferred: ${progressObj.transferred},
+          total: ${progressObj.total},
+          bytesPerSecond: ${progressObj.bytesPerSecond}
+        });
+      `);
+      
       this.sendToRenderer('update-status', { 
         status: 'downloading', 
-        percent: Math.round(progressObj.percent) 
+        percent: percent,
+        transferred: progressObj.transferred,
+        total: progressObj.total
       });
     });
 

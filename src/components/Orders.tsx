@@ -1110,10 +1110,36 @@ Termal Yazdırma Sistemi
                     
                     if (latestVersionNum > currentVersionNum) {
                       console.log('🆕 Yeni versiyon mevcut!', latestRelease.tag_name);
-                      alert(`🚀 Yeni versiyon mevcut!\n\nMevcut: v${currentVersion}\nYeni: ${latestRelease.tag_name}\n\nİndirme: ${latestRelease.html_url}`);
+                      
+                      // Confirmation dialog - easyRest--FrontSecond gibi
+                      const userConfirm = confirm(`🔄 Güncelleme Mevcut!\n\nMevcut versiyon: v${currentVersion}\nYeni versiyon: ${latestRelease.tag_name}\n\n📥 Güncellemek ister misiniz?\n\n✅ Tamam = Otomatik indir ve kur\n❌ İptal = Daha sonra`);
+                      
+                      if (userConfirm) {
+                        console.log('📥 Otomatik güncelleme başlatılıyor...');
+                        
+                        // Electron auto-updater ile otomatik indirme
+                        if (window.electronAPI && (window.electronAPI as any).downloadUpdate) {
+                          try {
+                            console.log('🔄 Electron auto-updater ile indirme başlatılıyor...');
+                            await (window.electronAPI as any).downloadUpdate();
+                            console.log('✅ İndirme başlatıldı, progress takip ediliyor...');
+                          } catch (error) {
+                            console.error('❌ Auto-updater indirme hatası:', error);
+                            // Fallback - manuel indirme
+                            window.open(latestRelease.html_url, '_blank');
+                            alert('🔄 Manuel indirme başlatıldı!\n\nSetup dosyasını indirip çalıştırın.');
+                          }
+                        } else {
+                          // Fallback - manuel indirme
+                          window.open(latestRelease.html_url, '_blank');
+                          alert('🔄 Manuel indirme başlatıldı!\n\nSetup dosyasını indirip çalıştırın.');
+                        }
+                      } else {
+                        console.log('⏭️ Güncelleme ertelendi');
+                      }
                     } else {
                       console.log('📭 Güncelleme mevcut değil');
-                      alert(`✅ En son versiyonu kullanıyorsunuz!\n\nMevcut: v${currentVersion}\nSon: ${latestRelease.tag_name}`);
+                      alert(`✅ En son versiyonu kullanıyorsunuz!\n\nMevcut: v${currentVersion}`);
                     }
                     
                   } catch (error) {
