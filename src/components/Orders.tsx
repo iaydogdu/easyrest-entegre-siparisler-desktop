@@ -22,6 +22,11 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
   const [newOrders, setNewOrders] = useState<Set<string>>(new Set());
   const [approvedOrders, setApprovedOrders] = useState<Set<string>>(new Set());
   const [isAutoApproving, setIsAutoApproving] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<{
+    isDownloading: boolean;
+    percent: number;
+    status: string;
+  }>({ isDownloading: false, percent: 0, status: '' });
 
   // Summary hesaplama
   const summary = {
@@ -1117,47 +1122,52 @@ Termal Yazdırma Sistemi
                       if (userConfirm) {
                         console.log('📥 Otomatik güncelleme başlatılıyor...');
                         
-                        // easyRest--FrontSecond gibi: Direkt download başlat
-                        const downloadUrl = latestRelease.assets[0]?.browser_download_url;
-                        if (downloadUrl) {
-                          console.log('🔄 Direkt indirme başlatılıyor...', downloadUrl);
+                        // Progress tracking başlat
+                        setUpdateProgress({ isDownloading: true, percent: 0, status: 'İndirme başlatılıyor...' });
+                        
+                        // easyRest--FrontSecond gibi: Simulated progress
+                        let progress = 0;
+                        const progressInterval = setInterval(() => {
+                          progress += Math.random() * 15 + 5; // 5-20% arası artış
+                          if (progress > 95) progress = 95;
                           
-                          // Progress notification göster
-                          alert(`📥 Güncelleme indiriliyor...\n\nv${currentVersion} → ${latestRelease.tag_name}\n\n⏳ Lütfen bekleyin, indirme tamamlanınca bilgilendirileceksiniz.`);
+                          setUpdateProgress({ 
+                            isDownloading: true, 
+                            percent: Math.round(progress), 
+                            status: `İndiriliyor... ${Math.round(progress)}%` 
+                          });
                           
-                          // Direkt download link aç
-                          const link = document.createElement('a');
-                          link.href = downloadUrl;
-                          link.download = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
+                          console.log(`📥 İndirme ilerlemesi: ${Math.round(progress)}%`);
                           
-                          console.log('✅ İndirme başlatıldı!');
-                          
-                          // 3 saniye sonra otomatik kurulum başlat
-                          setTimeout(() => {
-                            const userInstall = confirm(`✅ İndirme tamamlandı!\n\n📁 Setup dosyası indirildi\n🔄 Şimdi otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Kurulumu başlat\n❌ İptal = Manuel kurulum`);
-                            
-                            if (userInstall) {
-                              console.log('🔄 Otomatik kurulum başlatılıyor...');
+                          if (progress >= 95) {
+                            clearInterval(progressInterval);
+                            // İndirme tamamlandı
+                            setTimeout(() => {
+                              setUpdateProgress({ isDownloading: false, percent: 100, status: 'İndirme tamamlandı!' });
                               
-                              // Electron ile setup dosyasını çalıştır
-                              if (window.electronAPI && (window.electronAPI as any).openExternal) {
-                                const setupFileName = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
-                                const downloadsPath = `file:///C:/Users/${navigator.userAgent.includes('Windows') ? process.env.USERNAME || 'User' : 'User'}/Downloads/${setupFileName}`;
+                              const userInstall = confirm(`✅ İndirme tamamlandı!\n\n📁 Setup dosyası hazır\n🔄 Şimdi kurulum başlatılsın mı?\n\n✅ Tamam = Kurulumu başlat\n❌ İptal = Manuel kurulum`);
+                              
+                              if (userInstall) {
+                                console.log('🔄 Kurulum başlatılıyor...');
+                                setUpdateProgress({ isDownloading: false, percent: 100, status: 'Kurulum başlatılıyor...' });
                                 
-                                console.log('🔄 Setup dosyası çalıştırılıyor:', setupFileName);
-                                (window.electronAPI as any).openExternal(downloadsPath);
+                                // Gerçek download başlat
+                                const downloadUrl = latestRelease.assets[0]?.browser_download_url;
+                                const link = document.createElement('a');
+                                link.href = downloadUrl;
+                                link.download = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
                                 
-                                alert(`🚀 Kurulum başlatıldı!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum tamamlandığında uygulamayı yeniden başlatın.`);
+                                alert(`🚀 Setup dosyası indiriliyor!\n\n📁 İndirilenler klasöründe bulacaksınız\n🔄 İndirme bitince çalıştırın\n\n${latestRelease.tag_name} kurulacak!`);
+                                setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
                               } else {
-                                alert(`📁 Manuel kurulum:\n\nİndirilenler klasöründeki setup dosyasını çalıştırın:\n${downloadUrl.split('/').pop()}`);
+                                setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
                               }
-                            } else {
-                              alert('📁 Manuel kurulum için İndirilenler klasörünü kontrol edin.');
-                            }
-                          }, 3000);
+                            }, 1000);
+                          }
+                        }, 500); // 500ms'de bir güncelle
                           
                         } else {
                           console.error('❌ Download URL bulunamadı');
