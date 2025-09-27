@@ -1117,22 +1117,32 @@ Termal Yazdırma Sistemi
                       if (userConfirm) {
                         console.log('📥 Otomatik güncelleme başlatılıyor...');
                         
-                        // Electron auto-updater ile otomatik indirme
-                        if (window.electronAPI && (window.electronAPI as any).downloadUpdate) {
-                          try {
-                            console.log('🔄 Electron auto-updater ile indirme başlatılıyor...');
-                            await (window.electronAPI as any).downloadUpdate();
-                            console.log('✅ İndirme başlatıldı, progress takip ediliyor...');
-                          } catch (error) {
-                            console.error('❌ Auto-updater indirme hatası:', error);
-                            // Fallback - manuel indirme
-                            window.open(latestRelease.html_url, '_blank');
-                            alert('🔄 Manuel indirme başlatıldı!\n\nSetup dosyasını indirip çalıştırın.');
-                          }
+                        // easyRest--FrontSecond gibi: Direkt download başlat
+                        const downloadUrl = latestRelease.assets[0]?.browser_download_url;
+                        if (downloadUrl) {
+                          console.log('🔄 Direkt indirme başlatılıyor...', downloadUrl);
+                          
+                          // Progress notification göster
+                          alert(`📥 Güncelleme indiriliyor...\n\nv${currentVersion} → ${latestRelease.tag_name}\n\n⏳ Lütfen bekleyin, indirme tamamlanınca bilgilendirileceksiniz.`);
+                          
+                          // Direkt download link aç
+                          const link = document.createElement('a');
+                          link.href = downloadUrl;
+                          link.download = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          
+                          console.log('✅ İndirme başlatıldı!');
+                          
+                          // 5 saniye sonra kurulum talimatı
+                          setTimeout(() => {
+                            alert(`✅ İndirme tamamlandı!\n\n📁 İndirilenler klasörünü kontrol edin\n🔄 Setup dosyasını çalıştırın\n\n${latestRelease.tag_name} kurulacak!`);
+                          }, 5000);
+                          
                         } else {
-                          // Fallback - manuel indirme
+                          console.error('❌ Download URL bulunamadı');
                           window.open(latestRelease.html_url, '_blank');
-                          alert('🔄 Manuel indirme başlatıldı!\n\nSetup dosyasını indirip çalıştırın.');
                         }
                       } else {
                         console.log('⏭️ Güncelleme ertelendi');
