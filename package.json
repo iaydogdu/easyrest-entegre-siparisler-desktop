@@ -85,7 +85,6 @@
     "tailwindcss": "^4.1.13",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.0",
-    "electron": "^27.0.0",
     "electron-updater": "^6.6.2"
   },
   "devDependencies": {
@@ -94,6 +93,7 @@
     "@angular/compiler-cli": "^17.0.0",
     "@types/node": "^18.19.127",
     "concurrently": "^8.2.2",
+    "electron": "^27.0.0",
     "electron-builder": "^24.13.3",
     "typescript": "~5.2.0",
     "wait-on": "^7.2.0"
