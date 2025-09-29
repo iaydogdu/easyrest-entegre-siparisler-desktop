@@ -340,23 +340,26 @@ class Main {
     });
 
     autoUpdater.on('update-downloaded', (info) => {
-      console.log('✅ [AutoUpdater] Güncelleme hazır! 5 saniye sonra yeniden başlatılacak...', info);
+      console.log('✅ [AutoUpdater] Güncelleme hazır! 3 saniye sonra yeniden başlatılacak...', info);
       
       // React console'a da gönder
       this.mainWindow.webContents.executeJavaScript(`
-        console.log('✅ [ELECTRON] Güncelleme hazır! 5 saniye sonra yeniden başlatılacak...', ${JSON.stringify(info)});
+        console.log('✅ [ELECTRON] Güncelleme hazır! 3 saniye sonra yeniden başlatılacak...', ${JSON.stringify(info)});
+        alert('🎉 Güncelleme Tamamlandı!\\n\\n🔄 3 saniye sonra uygulama yeniden başlatılacak...\\n\\nYeni versiyon: ${info.version}');
       `);
       
       this.sendToRenderer('update-status', { status: 'downloaded', version: info.version });
 
-      // easyrest-second-screen-clean gibi: 5 saniye bekle ve otomatik restart
+      // easyrest-second-screen-clean gibi: 3 saniye bekle ve ZORLA restart
       setTimeout(() => {
-        console.log('🔄 [AutoUpdater] Yeniden başlatılıyor...');
+        console.log('🔄 [AutoUpdater] ZORLA yeniden başlatılıyor...');
         this.mainWindow.webContents.executeJavaScript(`
-          console.log('🔄 [ELECTRON] Yeniden başlatılıyor...');
+          console.log('🔄 [ELECTRON] ZORLA yeniden başlatılıyor...');
         `);
-        autoUpdater.quitAndInstall();
-      }, 5000);
+        
+        // Zorla restart - hiçbir dialog yok
+        autoUpdater.quitAndInstall(false, true);
+      }, 3000);
     });
   }
 
