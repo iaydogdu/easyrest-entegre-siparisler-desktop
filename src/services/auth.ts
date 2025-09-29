@@ -40,9 +40,10 @@ export class AuthService {
       
       // Token varsa başarılı
       if (data.token) {
-        // Token'ı kaydet
+        // Token'ı kaydet ve expiry time ekle (24 saat)
         localStorage.setItem('token', data.token);
         localStorage.setItem('kullaniciAdi', username);
+        localStorage.setItem('tokenExpiry', (Date.now() + 24 * 60 * 60 * 1000).toString()); // 24 saat sonra
         
         console.log('✅ Login başarılı, kullanıcı bilgileri alınıyor...');
         
@@ -142,5 +143,59 @@ export class AuthService {
 
   static getToken(): string | null {
     return localStorage.getItem('token');
+  }
+
+  // Token süresi kontrolü (24 saat)
+  static isTokenExpired(): boolean {
+    const expiry = localStorage.getItem('tokenExpiry');
+    if (!expiry) return true;
+    
+    const expiryTime = parseInt(expiry);
+    const now = Date.now();
+    
+    console.log('🕐 Token expiry check:', {
+      now: new Date(now).toLocaleString(),
+      expiry: new Date(expiryTime).toLocaleString(),
+      expired: now > expiryTime,
+      remainingHours: Math.round((expiryTime - now) / (60 * 60 * 1000))
+    });
+    
+    return now > expiryTime;
+  }
+
+  // Otomatik token refresh (kayıtlı kullanıcı adı/şifre ile)
+  static async refreshTokenIfExpired(): Promise<boolean> {
+    if (!this.isTokenExpired()) {
+      console.log('✅ Token hâlâ geçerli');
+      return true;
+    }
+
+    console.log('⏰ Token süresi dolmuş, otomatik refresh başlatılıyor...');
+    
+    // Kayıtlı bilgileri al
+    const savedUsername = localStorage.getItem('rememberedUsername');
+    const savedPassword = localStorage.getItem('rememberedPassword');
+    const rememberMe = localStorage.getItem('rememberMe') === 'true';
+    
+    if (!rememberMe || !savedUsername || !savedPassword) {
+      console.log('❌ Otomatik refresh için kayıtlı bilgi yok');
+      return false;
+    }
+
+    try {
+      console.log('🔄 Otomatik token refresh:', savedUsername);
+      const result = await this.login(savedUsername, savedPassword);
+      
+      if (result.success) {
+        console.log('✅ Token otomatik refresh başarılı!');
+        return true;
+      } else {
+        console.log('❌ Token refresh başarısız:', result.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Token refresh hatası:', error);
+      return false;
+    }
   }
 }

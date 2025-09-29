@@ -41,22 +41,47 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
 
   // Initialize
   useEffect(() => {
-    const initStores = AuthService.getStores();
-    setStores(initStores);
-    
-    const savedStore = AuthService.getSelectedStore();
-    if (savedStore) {
-      setSelectedStore(savedStore);
-    } else if (initStores.length > 0) {
-      setSelectedStore(initStores[0]._id);
-      AuthService.setSelectedStore(initStores[0]._id);
-    }
+    const initApp = async () => {
+      // Token expiry kontrolü ve otomatik refresh
+      console.log('🔐 Token expiry kontrolü başlatılıyor...');
+      const tokenValid = await AuthService.refreshTokenIfExpired();
+      
+      if (!tokenValid) {
+        console.log('❌ Token refresh başarısız, logout yapılıyor...');
+        alert('⏰ Oturum süresi dolmuş!\n\nLütfen tekrar giriş yapın.');
+        onLogout();
+        return;
+      }
 
-    const savedSound = localStorage.getItem('soundEnabled') === 'true';
-    setSoundEnabled(savedSound);
-    
-    const savedAutoApprove = localStorage.getItem('autoApproveEnabled') === 'true';
-    setAutoApproveEnabled(savedAutoApprove);
+      // Stores yükle
+      const initStores = AuthService.getStores();
+      setStores(initStores);
+      
+      // Son seçilen mağazayı yükle (localStorage'dan)
+      const savedStore = AuthService.getSelectedStore();
+      console.log('🏪 Kayıtlı mağaza:', savedStore);
+      
+      if (savedStore && initStores.find(s => s._id === savedStore)) {
+        console.log('✅ Son seçilen mağaza bulundu:', savedStore);
+        setSelectedStore(savedStore);
+      } else if (initStores.length > 0) {
+        console.log('🏪 İlk mağaza seçiliyor:', initStores[0]._id);
+        setSelectedStore(initStores[0]._id);
+        AuthService.setSelectedStore(initStores[0]._id);
+      }
+
+      // Ses ayarını yükle (localStorage'dan)
+      const savedSound = localStorage.getItem('soundEnabled') === 'true';
+      console.log('🔊 Kayıtlı ses ayarı:', savedSound);
+      setSoundEnabled(savedSound);
+      
+      // Otomatik onay ayarını yükle (localStorage'dan)
+      const savedAutoApprove = localStorage.getItem('autoApproveEnabled') === 'true';
+      console.log('⚡ Kayıtlı otomatik onay ayarı:', savedAutoApprove);
+      setAutoApproveEnabled(savedAutoApprove);
+    };
+
+    initApp();
 
     // Ana Angular projeden: Auto-updater test (basitleştirilmiş)
     console.log('🔄 Auto-updater sistemi aktif (Electron main process)');
