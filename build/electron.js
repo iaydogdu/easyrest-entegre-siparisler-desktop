@@ -166,21 +166,26 @@ class Main {
             label: 'Güncelleme Kontrol Et',
             accelerator: 'F5',
             click: () => {
-              if (autoUpdater) {
-                console.log('🔍 Manuel güncelleme kontrolü başlatılıyor...');
-                // React console'a da gönder
-                this.mainWindow.webContents.executeJavaScript(`
-                  console.log('🔍 [ELECTRON] Manuel güncelleme kontrolü başlatılıyor...');
-                  console.log('📋 [ELECTRON] Current version: ${app.getVersion()}');
-                  console.log('🔗 [ELECTRON] GitHub URL: https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases');
-                `);
-                autoUpdater.checkForUpdatesAndNotify();
-              } else {
-                console.warn('⚠️ Auto-updater mevcut değil!');
-                this.mainWindow.webContents.executeJavaScript(`
-                  console.error('❌ [ELECTRON] Auto-updater mevcut değil!');
-                `);
-              }
+              console.log('🔍 F5: Custom GitHub API kontrolü başlatılıyor...');
+              // React'taki custom update check fonksiyonunu çağır
+              this.mainWindow.webContents.executeJavaScript(`
+                console.log('🔍 [F5] Custom GitHub API update check başlatılıyor...');
+                
+                // Orders component'indeki update check fonksiyonunu çağır
+                const updateButton = document.querySelector('[data-update-check]');
+                if (updateButton) {
+                  updateButton.click();
+                  console.log('✅ [F5] Update check button tıklandı!');
+                } else {
+                  console.warn('⚠️ [F5] Update check button bulunamadı!');
+                  // Fallback: Custom update check
+                  if (typeof window.customUpdateCheck === 'function') {
+                    window.customUpdateCheck();
+                  } else {
+                    alert('F5: Güncelleme kontrolü için Orders sayfasında olmanız gerekiyor.');
+                  }
+                }
+              `);
             }
           },
           { type: 'separator' },

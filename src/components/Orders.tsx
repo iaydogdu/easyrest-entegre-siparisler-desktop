@@ -1068,6 +1068,7 @@ Termal Yazdırma Sistemi
 
               {/* Update Check Control */}
               <div 
+                data-update-check
                 onClick={async () => {
                   console.log('🔍 Custom update check başlatılıyor...');
                   
