@@ -1125,63 +1125,71 @@ Termal Yazdırma Sistemi
                         // Progress tracking başlat
                         setUpdateProgress({ isDownloading: true, percent: 0, status: 'İndirme başlatılıyor...' });
                         
-                        // TAM OTOMATİK: Electron native download API kullan
+                        // BROWSER DOWNLOAD + AUTO EXECUTE - easyRest--FrontSecond gibi
                         const downloadUrl = latestRelease.assets[0]?.browser_download_url;
-                        if (downloadUrl && window.electronAPI && (window.electronAPI as any).downloadFile) {
+                        if (downloadUrl) {
                           try {
-                            console.log('🚀 TAM OTOMATİK İNDİRME başlatılıyor...', downloadUrl);
+                            console.log('🚀 BROWSER DOWNLOAD başlatılıyor...', downloadUrl);
                             
-                            const fileName = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
-                            const downloadsPath = `C:\\Users\\${process.env.USERNAME || 'User'}\\Downloads\\${fileName}`;
+                            setUpdateProgress({ isDownloading: true, percent: 50, status: 'İndirme başlatılıyor...' });
                             
-                            // Electron üzerinden otomatik download
-                            const downloadResult = await (window.electronAPI as any).downloadFile(downloadUrl, downloadsPath);
+                            // Browser'ın kendi download manager'ını kullan
+                            const link = document.createElement('a');
+                            link.href = downloadUrl;
+                            link.download = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
                             
-                            if (downloadResult.success) {
-                              setUpdateProgress({ isDownloading: false, percent: 100, status: 'İndirme tamamlandı! Kurulum başlatılıyor...' });
-                              console.log('✅ TAM OTOMATİK indirme tamamlandı!');
+                            setUpdateProgress({ isDownloading: false, percent: 100, status: 'İndirme başlatıldı!' });
+                            console.log('✅ Browser download başlatıldı!');
+                            
+                            // 3 saniye bekle, sonra kurulum talimatı
+                            setTimeout(async () => {
+                              const autoInstall = confirm(`✅ İndirme Başlatıldı!\n\n📁 Setup dosyası İndirilenler klasörüne indirildi\n🚀 Otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Setup'ı çalıştır\n❌ İptal = Manuel kurulum`);
                               
-                              // 2 saniye bekle, sonra otomatik kurulum
-                              setTimeout(async () => {
-                                const autoInstall = confirm(`✅ İndirme Tamamlandı!\n\n🚀 Otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Hemen kur ve yeniden başlat\n❌ İptal = Manuel kurulum`);
+                              if (autoInstall) {
+                                console.log('🔄 Otomatik kurulum başlatılıyor...');
                                 
-                                if (autoInstall) {
-                                  console.log('🔄 TAM OTOMATİK kurulum başlatılıyor...');
-                                  
+                                // Electron executeFile API'sini kullan
+                                if (window.electronAPI && (window.electronAPI as any).executeFile) {
                                   try {
+                                    const downloadsPath = `C:\\Users\\${process.env.USERNAME || 'User'}\\Downloads\\EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                                    console.log('🔄 Setup dosyası çalıştırılıyor:', downloadsPath);
+                                    
                                     const result = await (window.electronAPI as any).executeFile(downloadsPath);
                                     
                                     if (result.success) {
                                       console.log('✅ Kurulum başarıyla başlatıldı!');
-                                      alert(`🚀 TAM OTOMATİK KURULUM!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum tamamlandıktan sonra uygulama yeniden başlayacak.`);
+                                      alert(`🚀 KURULUM BAŞLATILDI!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum wizard'ı açıldı. Kurulum tamamlandıktan sonra uygulama yeniden başlayacak.`);
                                     } else {
                                       console.error('❌ Kurulum başlatma hatası:', result.error);
-                                      alert(`❌ Kurulum başlatılamadı!\n\nManuel olarak çalıştırın:\n${downloadsPath}`);
+                                      alert(`❌ Otomatik kurulum başarısız!\n\nManuel olarak çalıştırın:\n${downloadsPath}`);
                                     }
                                   } catch (error) {
                                     console.error('❌ executeFile hatası:', error);
-                                    alert('❌ Kurulum başlatılamadı! Manuel olarak İndirilenler klasöründeki setup dosyasını çalıştırın.');
+                                    alert(`❌ Otomatik kurulum hatası!\n\nManuel olarak İndirilenler klasöründeki setup dosyasını çalıştırın:\nEasyRest-Setup-${latestRelease.tag_name}.exe`);
                                   }
                                 } else {
-                                  alert(`📁 Manuel kurulum: ${downloadsPath}`);
+                                  alert(`📁 Manuel kurulum gerekli:\n\nİndirilenler klasöründeki dosyayı çalıştırın:\nEasyRest-Setup-${latestRelease.tag_name}.exe`);
                                 }
-                                
-                                setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
-                              }, 2000);
-                            } else {
-                              throw new Error(downloadResult.error || 'İndirme hatası');
-                            }
+                              } else {
+                                alert(`📁 Manuel kurulum:\n\nİndirilenler klasöründeki dosyayı çalıştırın:\nEasyRest-Setup-${latestRelease.tag_name}.exe`);
+                              }
+                              
+                              setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
+                            }, 3000);
+                            
                           } catch (error) {
-                            console.error('❌ TAM OTOMATİK indirme hatası:', error);
+                            console.error('❌ Browser download hatası:', error);
                             setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
-                            alert('❌ İndirme hatası! Manuel indirme başlatılıyor...');
+                            alert('❌ İndirme hatası! GitHub sayfası açılıyor...');
                             window.open(latestRelease.html_url, '_blank');
                           }
                         } else {
-                          // Fallback: Eski yöntem
-                          console.log('⚠️ Electron download API yok, browser download kullanılıyor...');
-                          setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
-                          window.open(downloadUrl, '_blank');
+                          alert('❌ İndirme URL\'si bulunamadı!');
+                          window.open(latestRelease.html_url, '_blank');
                         }
                         
                       } else {
