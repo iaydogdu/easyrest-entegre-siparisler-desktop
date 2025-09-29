@@ -1,5 +1,7 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, dialog, Notification } = require('electron');
 const path = require('path');
+const https = require('https');
+const fs = require('fs');
 
 // Auto-updater'ı güvenli şekilde yükle
 let autoUpdater = null;
@@ -435,6 +437,59 @@ class Main {
         console.error('❌ Dosya çalıştırma hatası:', error);
         return { success: false, error: error.message };
       }
+    });
+
+    // TAM OTOMATİK Download file handler
+    ipcMain.handle('download-file', async (event, url, filePath) => {
+      return new Promise((resolve) => {
+        try {
+          console.log('🚀 TAM OTOMATİK indirme başlatılıyor:', { url, filePath });
+          
+          const file = fs.createWriteStream(filePath);
+          
+          https.get(url, (response) => {
+            // Redirect handling
+            if (response.statusCode === 302 || response.statusCode === 301) {
+              console.log('🔄 Redirect tespit edildi:', response.headers.location);
+              https.get(response.headers.location, (redirectResponse) => {
+                redirectResponse.pipe(file);
+                
+                file.on('finish', () => {
+                  file.close();
+                  console.log('✅ TAM OTOMATİK indirme tamamlandı:', filePath);
+                  resolve({ success: true, filePath });
+                });
+              }).on('error', (error) => {
+                console.error('❌ Redirect indirme hatası:', error);
+                fs.unlink(filePath, () => {}); // Cleanup
+                resolve({ success: false, error: error.message });
+              });
+            } else {
+              response.pipe(file);
+              
+              file.on('finish', () => {
+                file.close();
+                console.log('✅ TAM OTOMATİK indirme tamamlandı:', filePath);
+                resolve({ success: true, filePath });
+              });
+            }
+          }).on('error', (error) => {
+            console.error('❌ TAM OTOMATİK indirme hatası:', error);
+            fs.unlink(filePath, () => {}); // Cleanup
+            resolve({ success: false, error: error.message });
+          });
+          
+          file.on('error', (error) => {
+            console.error('❌ Dosya yazma hatası:', error);
+            fs.unlink(filePath, () => {}); // Cleanup
+            resolve({ success: false, error: error.message });
+          });
+          
+        } catch (error) {
+          console.error('❌ Download handler hatası:', error);
+          resolve({ success: false, error: error.message });
+        }
+      });
     });
   }
 

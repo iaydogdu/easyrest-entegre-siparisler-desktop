@@ -1125,80 +1125,35 @@ Termal Yazdırma Sistemi
                         // Progress tracking başlat
                         setUpdateProgress({ isDownloading: true, percent: 0, status: 'İndirme başlatılıyor...' });
                         
-                        // easyRest--FrontSecond gibi: Gerçek dosya indirme ile progress tracking
+                        // TAM OTOMATİK: Electron native download API kullan
                         const downloadUrl = latestRelease.assets[0]?.browser_download_url;
-                        if (downloadUrl) {
+                        if (downloadUrl && window.electronAPI && (window.electronAPI as any).downloadFile) {
                           try {
-                            console.log('🔄 Fetch ile gerçek indirme başlatılıyor...', downloadUrl);
+                            console.log('🚀 TAM OTOMATİK İNDİRME başlatılıyor...', downloadUrl);
                             
-                            const response = await fetch(downloadUrl);
-                            const contentLength = response.headers.get('content-length');
-                            const total = parseInt(contentLength || '0', 10);
+                            const fileName = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
+                            const downloadsPath = `C:\\Users\\${process.env.USERNAME || 'User'}\\Downloads\\${fileName}`;
                             
-                            if (!response.body) {
-                              throw new Error('Response body yok');
-                            }
+                            // Electron üzerinden otomatik download
+                            const downloadResult = await (window.electronAPI as any).downloadFile(downloadUrl, downloadsPath);
                             
-                            const reader = response.body.getReader();
-                            const chunks = [];
-                            let receivedLength = 0;
-                            
-                            while (true) {
-                              const { done, value } = await reader.read();
+                            if (downloadResult.success) {
+                              setUpdateProgress({ isDownloading: false, percent: 100, status: 'İndirme tamamlandı! Kurulum başlatılıyor...' });
+                              console.log('✅ TAM OTOMATİK indirme tamamlandı!');
                               
-                              if (done) break;
-                              
-                              chunks.push(value);
-                              receivedLength += value.length;
-                              
-                              // Gerçek progress hesapla
-                              const percent = total > 0 ? Math.round((receivedLength / total) * 100) : 0;
-                              
-                              setUpdateProgress({ 
-                                isDownloading: true, 
-                                percent: percent, 
-                                status: `İndiriliyor... ${percent}% (${Math.round(receivedLength / 1024 / 1024)} MB / ${Math.round(total / 1024 / 1024)} MB)` 
-                              });
-                              
-                              console.log(`📥 Gerçek indirme ilerlemesi: ${percent}% (${receivedLength}/${total})`);
-                            }
-                            
-                            // İndirme tamamlandı - dosyayı oluştur
-                            const blob = new Blob(chunks);
-                            const url = window.URL.createObjectURL(blob);
-                            
-                            setUpdateProgress({ isDownloading: false, percent: 100, status: 'İndirme tamamlandı!' });
-                            console.log('✅ Gerçek indirme tamamlandı!');
-                            
-                            // Otomatik download başlat
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = `EasyRest-Setup-${latestRelease.tag_name}.exe`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            
-                            // Cleanup
-                            window.URL.revokeObjectURL(url);
-                            
-                            // Kurulum talimatı
-                            setTimeout(async () => {
-                              const userInstall = confirm(`✅ İndirme tamamlandı!\n\n📁 Setup dosyası İndirilenler klasöründe\n🔄 Otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Kurulumu başlat\n❌ İptal = Manuel kurulum`);
-                              
-                              if (userInstall) {
-                                console.log('🔄 Otomatik kurulum başlatılıyor...');
+                              // 2 saniye bekle, sonra otomatik kurulum
+                              setTimeout(async () => {
+                                const autoInstall = confirm(`✅ İndirme Tamamlandı!\n\n🚀 Otomatik kurulum başlatılsın mı?\n\n✅ Tamam = Hemen kur ve yeniden başlat\n❌ İptal = Manuel kurulum`);
                                 
-                                // Gerçek kurulum başlat
-                                if (window.electronAPI && (window.electronAPI as any).executeFile) {
+                                if (autoInstall) {
+                                  console.log('🔄 TAM OTOMATİK kurulum başlatılıyor...');
+                                  
                                   try {
-                                    const downloadsPath = `C:\\Users\\${process.env.USERNAME || 'User'}\\Downloads\\EasyRest-Setup-${latestRelease.tag_name}.exe`;
-                                    console.log('🔄 Setup dosyası çalıştırılıyor:', downloadsPath);
-                                    
                                     const result = await (window.electronAPI as any).executeFile(downloadsPath);
                                     
                                     if (result.success) {
                                       console.log('✅ Kurulum başarıyla başlatıldı!');
-                                      alert(`🚀 Kurulum başlatıldı!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum wizard'ı açıldı.`);
+                                      alert(`🚀 TAM OTOMATİK KURULUM!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum tamamlandıktan sonra uygulama yeniden başlayacak.`);
                                     } else {
                                       console.error('❌ Kurulum başlatma hatası:', result.error);
                                       alert(`❌ Kurulum başlatılamadı!\n\nManuel olarak çalıştırın:\n${downloadsPath}`);
@@ -1208,19 +1163,25 @@ Termal Yazdırma Sistemi
                                     alert('❌ Kurulum başlatılamadı! Manuel olarak İndirilenler klasöründeki setup dosyasını çalıştırın.');
                                   }
                                 } else {
-                                  alert('📁 Manuel kurulum: İndirilenler klasöründeki setup dosyasını çalıştırın.');
+                                  alert(`📁 Manuel kurulum: ${downloadsPath}`);
                                 }
-                              }
-                              
-                              setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
-                            }, 2000);
-                            
+                                
+                                setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
+                              }, 2000);
+                            } else {
+                              throw new Error(downloadResult.error || 'İndirme hatası');
+                            }
                           } catch (error) {
-                            console.error('❌ Gerçek indirme hatası:', error);
+                            console.error('❌ TAM OTOMATİK indirme hatası:', error);
                             setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
                             alert('❌ İndirme hatası! Manuel indirme başlatılıyor...');
                             window.open(latestRelease.html_url, '_blank');
                           }
+                        } else {
+                          // Fallback: Eski yöntem
+                          console.log('⚠️ Electron download API yok, browser download kullanılıyor...');
+                          setUpdateProgress({ isDownloading: false, percent: 0, status: '' });
+                          window.open(downloadUrl, '_blank');
                         }
                         
                       } else {

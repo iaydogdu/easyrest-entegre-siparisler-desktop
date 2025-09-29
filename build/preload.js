@@ -26,5 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   installUpdate: () => ipcRenderer.invoke('install-update'),
   
   // File execution
-  executeFile: (filePath) => ipcRenderer.invoke('execute-file', filePath)
+  executeFile: (filePath) => ipcRenderer.invoke('execute-file', filePath),
+  
+  // TAM OTOMATİK File download
+  downloadFile: (url, filePath) => ipcRenderer.invoke('download-file', url, filePath)
 });
