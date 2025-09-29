@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog, Notification } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, Notification, session } = require('electron');
 const path = require('path');
 const https = require('https');
 const http = require('http');
@@ -166,26 +166,21 @@ class Main {
             label: 'Güncelleme Kontrol Et',
             accelerator: 'F5',
             click: () => {
-              console.log('🔍 F5: Custom GitHub API kontrolü başlatılıyor...');
-              // React'taki custom update check fonksiyonunu çağır
-              this.mainWindow.webContents.executeJavaScript(`
-                console.log('🔍 [F5] Custom GitHub API update check başlatılıyor...');
-                
-                // Orders component'indeki update check fonksiyonunu çağır
-                const updateButton = document.querySelector('[data-update-check]');
-                if (updateButton) {
-                  updateButton.click();
-                  console.log('✅ [F5] Update check button tıklandı!');
-                } else {
-                  console.warn('⚠️ [F5] Update check button bulunamadı!');
-                  // Fallback: Custom update check
-                  if (typeof window.customUpdateCheck === 'function') {
-                    window.customUpdateCheck();
-                  } else {
-                    alert('F5: Güncelleme kontrolü için Orders sayfasında olmanız gerekiyor.');
-                  }
-                }
-              `);
+              if (autoUpdater) {
+                console.log('🔍 [F5] Pure electron-updater kontrolü başlatılıyor...');
+                // React console'a da gönder
+                this.mainWindow.webContents.executeJavaScript(`
+                  console.log('🔍 [F5] Pure electron-updater kontrolü başlatılıyor...');
+                  console.log('📋 [F5] Current version: ${app.getVersion()}');
+                  console.log('🔗 [F5] GitHub URL: https://github.com/iaydogdu/easyrest-entegre-siparisler-desktop/releases');
+                `);
+                autoUpdater.checkForUpdatesAndNotify();
+              } else {
+                console.warn('⚠️ Auto-updater mevcut değil!');
+                this.mainWindow.webContents.executeJavaScript(`
+                  console.error('❌ [F5] Auto-updater mevcut değil!');
+                `);
+              }
             }
           },
           { type: 'separator' },
@@ -228,9 +223,17 @@ class Main {
       return;
     }
 
-    // Auto updater konfigürasyonu - easyRest--FrontSecond gibi
+    // Auto updater konfigürasyonu - easyrest-second-screen-clean gibi
     autoUpdater.autoDownload = true; // Otomatik indirme açık
     autoUpdater.autoInstallOnAppQuit = true; // Uygulama kapanırken otomatik yükle
+    
+    // GitHub feed URL ayarla
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'iaydogdu',
+      repo: 'easyrest-entegre-siparisler-desktop',
+      private: false
+    });
 
     autoUpdater.on('checking-for-update', () => {
       const logData = {
@@ -337,23 +340,23 @@ class Main {
     });
 
     autoUpdater.on('update-downloaded', (info) => {
-      console.log('Güncelleme indirildi:', info);
-      this.sendToRenderer('update-status', { status: 'downloaded' });
+      console.log('✅ [AutoUpdater] Güncelleme hazır! 5 saniye sonra yeniden başlatılacak...', info);
+      
+      // React console'a da gönder
+      this.mainWindow.webContents.executeJavaScript(`
+        console.log('✅ [ELECTRON] Güncelleme hazır! 5 saniye sonra yeniden başlatılacak...', ${JSON.stringify(info)});
+      `);
+      
+      this.sendToRenderer('update-status', { status: 'downloaded', version: info.version });
 
-      // Kullanıcıya restart sor
-      dialog.showMessageBox(this.mainWindow, {
-        type: 'info',
-        title: 'Güncelleme Hazır',
-        message: 'Güncelleme başarıyla indirildi!',
-        detail: 'Uygulamayı yeniden başlatarak güncellemeyi tamamlayabilirsiniz.',
-        buttons: ['Şimdi Yeniden Başlat', 'Daha Sonra'],
-        defaultId: 0,
-        cancelId: 1
-      }).then((result) => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall();
-        }
-      });
+      // easyrest-second-screen-clean gibi: 5 saniye bekle ve otomatik restart
+      setTimeout(() => {
+        console.log('🔄 [AutoUpdater] Yeniden başlatılıyor...');
+        this.mainWindow.webContents.executeJavaScript(`
+          console.log('🔄 [ELECTRON] Yeniden başlatılıyor...');
+        `);
+        autoUpdater.quitAndInstall();
+      }, 5000);
     });
   }
 
@@ -446,89 +449,60 @@ class Main {
       }
     });
 
-    // ULTIMATE DOWNLOAD file handler
+    // ELECTRON SESSION DOWNLOAD - easyRest--FrontSecond style
     ipcMain.handle('download-file', async (event, url, filePath) => {
       return new Promise((resolve) => {
         try {
-          console.log('🚀 ULTIMATE DOWNLOAD başlatılıyor:', { url, filePath });
+          console.log('🚀 ELECTRON SESSION DOWNLOAD başlatılıyor:', { url, filePath });
           
-          // URL parsing
-          const urlObj = new URL(url);
-          const isHttps = urlObj.protocol === 'https:';
-          const httpModule = isHttps ? https : http;
+          // Electron session download - otomatik, kaydetme yeri sormuyor!
+          this.mainWindow.webContents.session.downloadURL(url);
           
-          const file = fs.createWriteStream(filePath);
-          let redirectCount = 0;
-          const maxRedirects = 5;
-          
-          const downloadFile = (downloadUrl) => {
-            const urlObj = new URL(downloadUrl);
-            const isHttps = urlObj.protocol === 'https:';
-            const httpModule = isHttps ? https : http;
+          // Download event listener
+          this.mainWindow.webContents.session.once('will-download', (event, item, webContents) => {
+            console.log('📥 Download başladı:', item.getFilename());
             
-            console.log(`🔄 İndirme denemesi: ${downloadUrl} (redirect: ${redirectCount})`);
+            // Otomatik kaydetme yeri belirle
+            const fileName = `EasyRest-Setup-${item.getFilename().split('-').pop()}`;
+            const downloadsPath = path.join(require('os').homedir(), 'Downloads', fileName);
+            item.setSavePath(downloadsPath);
             
-            httpModule.get(downloadUrl, (response) => {
-              console.log(`📡 Response status: ${response.statusCode}`);
-              
-              // Redirect handling
-              if (response.statusCode === 302 || response.statusCode === 301 || response.statusCode === 307 || response.statusCode === 308) {
-                if (redirectCount >= maxRedirects) {
-                  console.error('❌ Çok fazla redirect:', redirectCount);
-                  fs.unlink(filePath, () => {});
-                  resolve({ success: false, error: 'Çok fazla redirect' });
-                  return;
+            console.log('💾 Kaydetme yeri:', downloadsPath);
+            
+            // Progress tracking
+            item.on('updated', (event, state) => {
+              if (state === 'interrupted') {
+                console.error('❌ Download interrupted');
+                resolve({ success: false, error: 'Download interrupted' });
+              } else if (state === 'progressing') {
+                if (item.isPaused()) {
+                  console.log('⏸️ Download paused');
+                } else {
+                  const percent = Math.round((item.getReceivedBytes() / item.getTotalBytes()) * 100);
+                  console.log(`📥 Download progress: ${percent}% (${item.getReceivedBytes()}/${item.getTotalBytes()})`);
+                  
+                  // React'a progress gönder
+                  this.mainWindow.webContents.executeJavaScript(`
+                    console.log('📥 [ELECTRON] Download progress: ${percent}%');
+                  `);
                 }
-                
-                redirectCount++;
-                const newUrl = response.headers.location;
-                console.log(`🔄 Redirect ${redirectCount}: ${newUrl}`);
-                
-                response.resume(); // Consume response
-                downloadFile(newUrl);
-                return;
               }
-              
-              if (response.statusCode !== 200) {
-                console.error('❌ HTTP hatası:', response.statusCode);
-                fs.unlink(filePath, () => {});
-                resolve({ success: false, error: `HTTP ${response.statusCode}` });
-                return;
-              }
-              
-              // Success - pipe to file
-              response.pipe(file);
-              
-              file.on('finish', () => {
-                file.close();
-                console.log('✅ ULTIMATE DOWNLOAD tamamlandı:', filePath);
-                resolve({ success: true, filePath });
-              });
-              
-              response.on('error', (error) => {
-                console.error('❌ Response hatası:', error);
-                fs.unlink(filePath, () => {});
-                resolve({ success: false, error: error.message });
-              });
-              
-            }).on('error', (error) => {
-              console.error('❌ Request hatası:', error);
-              fs.unlink(filePath, () => {});
-              resolve({ success: false, error: error.message });
             });
-          };
-          
-          file.on('error', (error) => {
-            console.error('❌ Dosya yazma hatası:', error);
-            fs.unlink(filePath, () => {});
-            resolve({ success: false, error: error.message });
+            
+            // Download completed
+            item.once('done', (event, state) => {
+              if (state === 'completed') {
+                console.log('✅ ELECTRON SESSION DOWNLOAD tamamlandı:', downloadsPath);
+                resolve({ success: true, filePath: downloadsPath });
+              } else {
+                console.error('❌ Download failed:', state);
+                resolve({ success: false, error: `Download failed: ${state}` });
+              }
+            });
           });
           
-          // Start download
-          downloadFile(url);
-          
         } catch (error) {
-          console.error('❌ Download handler hatası:', error);
+          console.error('❌ ELECTRON SESSION DOWNLOAD hatası:', error);
           resolve({ success: false, error: error.message });
         }
       });
