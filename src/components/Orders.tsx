@@ -1156,7 +1156,17 @@ Termal Yazdırma Sistemi
                                     
                                     if (result.success) {
                                       console.log('✅ Kurulum başarıyla başlatıldı!');
-                                      alert(`🚀 TAM OTOMATİK KURULUM!\n\n${latestRelease.tag_name} kuruluyor...\n\nKurulum wizard'ı açıldı. Kurulum tamamlandıktan sonra uygulama yeniden başlayacak.`);
+                                      alert(`🚀 TAM OTOMATİK KURULUM!\n\n${latestRelease.tag_name} kuruluyor...\n\n⚠️ 3 saniye sonra uygulama kapanacak!\nKurulum tamamlandıktan sonra yeni version açılacak.`);
+                                      
+                                      // 3 saniye bekle sonra uygulamayı kapat
+                                      setTimeout(() => {
+                                        console.log('🔄 Kurulum için uygulama kapatılıyor...');
+                                        if (window.electronAPI && (window.electronAPI as any).close) {
+                                          (window.electronAPI as any).close();
+                                        } else {
+                                          window.close();
+                                        }
+                                      }, 3000);
                                     } else {
                                       console.error('❌ Kurulum başlatma hatası:', result.error);
                                       alert(`❌ Otomatik kurulum başarısız!\n\nManuel olarak çalıştırın:\n${downloadResult.filePath}`);
