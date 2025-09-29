@@ -966,19 +966,19 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
 <meta charset="utf-8">
 <title>Sipariş #${orderId}</title>
 <style>
-body { font-family: 'Courier New', monospace; font-size: 16px; max-width: 72mm; margin: 0 auto; padding: 8px; line-height: 1.5; }
-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-th, td { text-align: left; padding: 4px 3px; font-size: 15px; vertical-align: top; }
-.header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #000; }
-.order-id { font-size: 24px; font-weight: bold; margin-bottom: 6px; }
-.section-title { font-size: 18px; font-weight: bold; border-bottom: 1px solid #000; margin: 15px 0 8px; padding-bottom: 3px; }
-.product-name { font-size: 16px; font-weight: bold; }
-.quantity { text-align: center; font-weight: bold; font-size: 16px; }
-.price { text-align: right; font-weight: bold; font-size: 16px; }
-.total-row { font-weight: bold; font-size: 16px; padding: 6px 0; }
-.customer-info { font-size: 16px; }
-.label { font-weight: bold; width: 30%; font-size: 16px; }
-.customer-value { font-size: 16px; }
+body { font-family: 'Courier New', monospace; font-size: 20px; max-width: 72mm; margin: 0 auto; padding: 8px; line-height: 1.6; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+th, td { text-align: left; padding: 6px 4px; font-size: 18px; vertical-align: top; }
+.header { text-align: center; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #000; }
+.order-id { font-size: 28px; font-weight: bold; margin-bottom: 8px; }
+.section-title { font-size: 22px; font-weight: bold; border-bottom: 1px solid #000; margin: 18px 0 10px; padding-bottom: 4px; }
+.product-name { font-size: 20px; font-weight: bold; }
+.quantity { text-align: center; font-weight: bold; font-size: 20px; }
+.price { text-align: right; font-weight: bold; font-size: 20px; }
+.total-row { font-weight: bold; font-size: 22px; padding: 8px 0; }
+.customer-info { font-size: 20px; }
+.label { font-weight: bold; width: 30%; font-size: 20px; }
+.customer-value { font-size: 20px; }
 </style>
 </head>
 <body>
