@@ -394,6 +394,72 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     }
   }, [filteredOrders, soundEnabled, autoApproveEnabled, audio]);
 
+  // Otomatik onay sistemi - Ana Angular projeden
+  useEffect(() => {
+    if (!autoApproveEnabled || isAutoApproving) return;
+    
+    const newOrdersToApprove = filteredOrders.filter(order => 
+      isNewOrder(order) && !approvedOrders.has(OrderService.getOrderId(order))
+    );
+    
+    if (newOrdersToApprove.length > 0) {
+      console.log(`⚡ Otomatik onay başlatılıyor: ${newOrdersToApprove.length} sipariş`);
+      setIsAutoApproving(true);
+      
+      // Her siparişi sırayla onayla
+      const approveOrders = async () => {
+        for (const order of newOrdersToApprove) {
+          const orderId = OrderService.getOrderId(order);
+          console.log(`⚡ Otomatik onaylama: ${orderId} (${order.type})`);
+          
+          try {
+            const success = await OrderService.approveOrder(order);
+            if (success) {
+              console.log(`✅ Otomatik onay başarılı: ${orderId}`);
+              
+              // Onaylanan siparişi işaretle
+              setApprovedOrders(prev => new Set([...prev, orderId]));
+              
+              // HEMEN orders'ı güncelle
+              loadOrders(true);
+              
+              // Sonra yazdırma işlemleri (background'da)
+              setTimeout(async () => {
+                console.log(`🖨️ Otomatik yazdırma başlatılıyor: ${orderId}`);
+                try {
+                  await printToThermalPrinter(order);
+                  await printAccountReceipt(order);
+                  console.log(`🎉 Otomatik onay + yazdırma tamamlandı: ${orderId}`);
+                } catch (printError) {
+                  console.error(`❌ Otomatik yazdırma hatası: ${orderId}`, printError);
+                }
+              }, 1000); // 1 saniye sonra yazdırma
+              
+              // 2 saniye bekle (API rate limiting için)
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            } else {
+              console.error(`❌ Otomatik onay başarısız: ${orderId}`);
+            }
+          } catch (error) {
+            console.error(`❌ Otomatik onay hatası: ${orderId}`, error);
+          }
+        }
+        
+        setIsAutoApproving(false);
+        
+        // Siparişleri yenile
+        setTimeout(() => {
+          loadOrders(true);
+        }, 3000);
+      };
+      
+      // 5 saniye bekle, sonra otomatik onay başlat
+      setTimeout(() => {
+        approveOrders();
+      }, 5000);
+    }
+  }, [filteredOrders, autoApproveEnabled, isAutoApproving, approvedOrders]);
+
   const toggleSound = () => {
     const newSoundState = !soundEnabled;
     setSoundEnabled(newSoundState);
@@ -408,11 +474,36 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
 
   // Order actions
   const handleApproveOrder = async (order: Order) => {
-    const success = await OrderService.approveOrder(order);
-    if (success) {
-      // Refresh orders
-      loadOrders();
-      setSelectedOrder(null);
+    const orderId = OrderService.getOrderId(order);
+    console.log(`✅ Manuel onay başlatılıyor: ${orderId}`);
+    
+    try {
+      const success = await OrderService.approveOrder(order);
+      if (success) {
+        console.log(`✅ Manuel onay başarılı: ${orderId}`);
+        
+        // HEMEN status güncelle - UI'da onaylandı göster
+        setSelectedOrder(null);
+        loadOrders(); // Hemen yenile
+        
+        // Sonra yazdırma işlemleri (background'da)
+        setTimeout(async () => {
+          console.log(`🖨️ Manuel onay sonrası yazdırma: ${orderId}`);
+          try {
+            await printToThermalPrinter(order);
+            await printAccountReceipt(order);
+            console.log(`🎉 Manuel onay + yazdırma tamamlandı: ${orderId}`);
+          } catch (printError) {
+            console.error(`❌ Yazdırma hatası: ${orderId}`, printError);
+          }
+        }, 1000); // 1 saniye sonra yazdırma
+      } else {
+        console.error(`❌ Manuel onay başarısız: ${orderId}`);
+        alert(`❌ Onay başarısız!\n\nSipariş: ${orderId}\nLütfen tekrar deneyin.`);
+      }
+    } catch (error) {
+      console.error(`❌ Manuel onay hatası: ${orderId}`, error);
+      alert(`❌ Onay hatası!\n\nSipariş: ${orderId}\nHata: ${error}`);
     }
   };
 
