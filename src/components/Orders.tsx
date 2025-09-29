@@ -1181,17 +1181,16 @@ Termal Yazdırma Sistemi
                                     
                                     if (result.success) {
                                       console.log('✅ Kurulum başarıyla başlatıldı!');
-                                      alert(`🚀 TAM OTOMATİK KURULUM!\n\n${latestRelease.tag_name} kuruluyor...\n\n⚠️ 3 saniye sonra uygulama kapanacak!\nKurulum tamamlandıktan sonra yeni version açılacak.`);
+                                      console.log('🔄 Kurulum için uygulama DİREK kapatılıyor...');
                                       
-                                      // 3 saniye bekle sonra uygulamayı kapat
+                                      // Direkt kapat - dialog yok!
                                       setTimeout(() => {
-                                        console.log('🔄 Kurulum için uygulama kapatılıyor...');
                                         if (window.electronAPI && (window.electronAPI as any).close) {
                                           (window.electronAPI as any).close();
                                         } else {
                                           window.close();
                                         }
-                                      }, 3000);
+                                      }, 1000); // 1 saniye bekle
                                     } else {
                                       console.error('❌ Kurulum başlatma hatası:', result.error);
                                       alert(`❌ Otomatik kurulum başarısız!\n\nManuel olarak çalıştırın:\n${downloadResult.filePath}`);
