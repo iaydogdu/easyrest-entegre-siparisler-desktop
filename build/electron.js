@@ -1,7 +1,9 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, dialog, Notification } = require('electron');
 const path = require('path');
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
+const { URL } = require('url');
 
 // Auto-updater'ı güvenli şekilde yükle
 let autoUpdater = null;
@@ -439,51 +441,86 @@ class Main {
       }
     });
 
-    // TAM OTOMATİK Download file handler
+    // ULTIMATE DOWNLOAD file handler
     ipcMain.handle('download-file', async (event, url, filePath) => {
       return new Promise((resolve) => {
         try {
-          console.log('🚀 TAM OTOMATİK indirme başlatılıyor:', { url, filePath });
+          console.log('🚀 ULTIMATE DOWNLOAD başlatılıyor:', { url, filePath });
+          
+          // URL parsing
+          const urlObj = new URL(url);
+          const isHttps = urlObj.protocol === 'https:';
+          const httpModule = isHttps ? https : http;
           
           const file = fs.createWriteStream(filePath);
+          let redirectCount = 0;
+          const maxRedirects = 5;
           
-          https.get(url, (response) => {
-            // Redirect handling
-            if (response.statusCode === 302 || response.statusCode === 301) {
-              console.log('🔄 Redirect tespit edildi:', response.headers.location);
-              https.get(response.headers.location, (redirectResponse) => {
-                redirectResponse.pipe(file);
+          const downloadFile = (downloadUrl) => {
+            const urlObj = new URL(downloadUrl);
+            const isHttps = urlObj.protocol === 'https:';
+            const httpModule = isHttps ? https : http;
+            
+            console.log(`🔄 İndirme denemesi: ${downloadUrl} (redirect: ${redirectCount})`);
+            
+            httpModule.get(downloadUrl, (response) => {
+              console.log(`📡 Response status: ${response.statusCode}`);
+              
+              // Redirect handling
+              if (response.statusCode === 302 || response.statusCode === 301 || response.statusCode === 307 || response.statusCode === 308) {
+                if (redirectCount >= maxRedirects) {
+                  console.error('❌ Çok fazla redirect:', redirectCount);
+                  fs.unlink(filePath, () => {});
+                  resolve({ success: false, error: 'Çok fazla redirect' });
+                  return;
+                }
                 
-                file.on('finish', () => {
-                  file.close();
-                  console.log('✅ TAM OTOMATİK indirme tamamlandı:', filePath);
-                  resolve({ success: true, filePath });
-                });
-              }).on('error', (error) => {
-                console.error('❌ Redirect indirme hatası:', error);
-                fs.unlink(filePath, () => {}); // Cleanup
-                resolve({ success: false, error: error.message });
-              });
-            } else {
+                redirectCount++;
+                const newUrl = response.headers.location;
+                console.log(`🔄 Redirect ${redirectCount}: ${newUrl}`);
+                
+                response.resume(); // Consume response
+                downloadFile(newUrl);
+                return;
+              }
+              
+              if (response.statusCode !== 200) {
+                console.error('❌ HTTP hatası:', response.statusCode);
+                fs.unlink(filePath, () => {});
+                resolve({ success: false, error: `HTTP ${response.statusCode}` });
+                return;
+              }
+              
+              // Success - pipe to file
               response.pipe(file);
               
               file.on('finish', () => {
                 file.close();
-                console.log('✅ TAM OTOMATİK indirme tamamlandı:', filePath);
+                console.log('✅ ULTIMATE DOWNLOAD tamamlandı:', filePath);
                 resolve({ success: true, filePath });
               });
-            }
-          }).on('error', (error) => {
-            console.error('❌ TAM OTOMATİK indirme hatası:', error);
-            fs.unlink(filePath, () => {}); // Cleanup
-            resolve({ success: false, error: error.message });
-          });
+              
+              response.on('error', (error) => {
+                console.error('❌ Response hatası:', error);
+                fs.unlink(filePath, () => {});
+                resolve({ success: false, error: error.message });
+              });
+              
+            }).on('error', (error) => {
+              console.error('❌ Request hatası:', error);
+              fs.unlink(filePath, () => {});
+              resolve({ success: false, error: error.message });
+            });
+          };
           
           file.on('error', (error) => {
             console.error('❌ Dosya yazma hatası:', error);
-            fs.unlink(filePath, () => {}); // Cleanup
+            fs.unlink(filePath, () => {});
             resolve({ success: false, error: error.message });
           });
+          
+          // Start download
+          downloadFile(url);
           
         } catch (error) {
           console.error('❌ Download handler hatası:', error);
