@@ -278,15 +278,18 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     const initializeAudio = async () => {
       try {
         console.log('🔊 Ses sistemi başlatılıyor...');
-        // Electron desktop app için dynamic path
+        // Electron API kullan (artık doğru path döndürüyor)
         const isElectron = window.electronAPI;
         let audioPath;
+        
         if (isElectron && (window.electronAPI as any).getAssetPath) {
-          // Electron'dan dynamic asset path al
+          // Electron API ile doğru path al
           audioPath = await (window.electronAPI as any).getAssetPath('sounds/web.mp3');
+          console.log('🔊 Electron ses path:', audioPath);
         } else {
-          // Web browser için absolute path
+          // Web browser fallback
           audioPath = '/assets/sounds/web.mp3';
+          console.log('🔊 Browser ses path:', audioPath);
         }
         console.log('🔊 Ses dosyası path:', audioPath);
         const audioElement = new Audio(audioPath);
@@ -415,15 +418,31 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
           try {
             const success = await OrderService.approveOrder(order);
             if (success) {
-              console.log(`✅ Otomatik onay başarılı: ${orderId}`);
+              console.log(`✅ Otomatik onay başarılı: ${orderId} - API 200 döndü`);
               
-              // Onaylanan siparişi işaretle
+              // 1. HEMEN ses kes - o sipariş için
+              if (audio && !audio.paused) {
+                audio.pause();
+                audio.currentTime = 0;
+                setIsPlaying(false);
+                console.log(`🔇 Otomatik onay - Ses kesildi: ${orderId}`);
+              }
+              
+              // 2. HEMEN kırmızılığı kaldır - newOrders'dan çıkar
+              setNewOrders(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(orderId);
+                console.log(`🟢 Otomatik onay - Kırmızılık kaldırıldı: ${orderId}`);
+                return newSet;
+              });
+              
+              // 3. Onaylanan siparişi işaretle
               setApprovedOrders(prev => new Set([...prev, orderId]));
               
-              // HEMEN orders'ı güncelle
-              loadOrders(true);
+              // 4. HEMEN orders'ı güncelle
+              loadOrders(true); // Force refresh - hemen yenile
               
-              // Sonra yazdırma işlemleri (background'da)
+              // 5. Sonra yazdırma işlemleri (background'da)
               setTimeout(async () => {
                 console.log(`🖨️ Otomatik yazdırma başlatılıyor: ${orderId}`);
                 try {
@@ -433,10 +452,10 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
                 } catch (printError) {
                   console.error(`❌ Otomatik yazdırma hatası: ${orderId}`, printError);
                 }
-              }, 1000); // 1 saniye sonra yazdırma
+              }, 500); // 500ms sonra yazdırma (daha hızlı)
               
-              // 2 saniye bekle (API rate limiting için)
-              await new Promise(resolve => setTimeout(resolve, 2000));
+              // 6. API rate limiting için bekle
+              await new Promise(resolve => setTimeout(resolve, 1500));
             } else {
               console.error(`❌ Otomatik onay başarısız: ${orderId}`);
             }
@@ -480,13 +499,29 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
     try {
       const success = await OrderService.approveOrder(order);
       if (success) {
-        console.log(`✅ Manuel onay başarılı: ${orderId}`);
+        console.log(`✅ Manuel onay başarılı: ${orderId} - API 200 döndü`);
         
-        // HEMEN status güncelle - UI'da onaylandı göster
+        // 1. HEMEN ses kes - o sipariş için
+        if (audio && !audio.paused) {
+          audio.pause();
+          audio.currentTime = 0;
+          setIsPlaying(false);
+          console.log(`🔇 Ses kesildi: ${orderId} onaylandı`);
+        }
+        
+        // 2. HEMEN kırmızılığı kaldır - newOrders'dan çıkar
+        setNewOrders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(orderId);
+          console.log(`🟢 Kırmızılık kaldırıldı: ${orderId}`);
+          return newSet;
+        });
+        
+        // 3. HEMEN status güncelle - UI'da onaylandı göster
         setSelectedOrder(null);
-        loadOrders(); // Hemen yenile
+        loadOrders(true); // Force refresh - hemen yenile
         
-        // Sonra yazdırma işlemleri (background'da)
+        // 4. Sonra yazdırma işlemleri (background'da)
         setTimeout(async () => {
           console.log(`🖨️ Manuel onay sonrası yazdırma: ${orderId}`);
           try {
@@ -496,7 +531,7 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
           } catch (printError) {
             console.error(`❌ Yazdırma hatası: ${orderId}`, printError);
           }
-        }, 1000); // 1 saniye sonra yazdırma
+        }, 500); // 500ms sonra yazdırma (daha hızlı)
       } else {
         console.error(`❌ Manuel onay başarısız: ${orderId}`);
         alert(`❌ Onay başarısız!\n\nSipariş: ${orderId}\nLütfen tekrar deneyin.`);
@@ -748,193 +783,143 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
       customerNote = address.description || '';
     }
 
-    // Platform-specific ürün HTML'i oluştur
-    let productsHtml = '';
-    
+    // Ana Angular projeden: Ürünler için HTML oluştur (birebir kopya)
+    let productsHtmlParts: string[] = [];
+
+    // Product bilgisini HTML'ye dönüştür - Ana Angular'dan tam kopya
     if (order.type === 'YEMEKSEPETI') {
-      productsHtml = products.map(product => {
-        let productHtml = `
-        <tr>
-          <td class="product-name">${OrderService.getProductName(product)}</td>
-          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
-          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
-        </tr>`;
+      // YemekSepeti siparişlerinde doğrudan rawData'dan ürünleri al
+      const products = order.rawData.products || [];
+      console.log('YemekSepeti Ürünleri:', products);
 
-        // Ana Angular projeden: YemekSepeti Selected toppings
-        if (product.selectedToppings && product.selectedToppings.length > 0) {
-          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
-          product.selectedToppings.forEach((topping: any) => {
-            if (topping && topping.name) {
-              // Güvenli fiyat dönüşümü
-              const toppingPriceNum = parseFloat(topping.price || 0);
-              const toppingPrice = toppingPriceNum > 0 ? ` (+${toppingPriceNum.toFixed(2)} ₺)` : '';
-              productHtml += `<div style="margin: 4px 0; color: #4CAF50; font-size: 16px;"><span style="font-weight: bold;">✓</span> ${topping.name}${toppingPrice}</div>`;
-              
-              // Ana Angular projeden: Children (alt seçenekler)
-              if (topping.children && topping.children.length > 0) {
-                topping.children.forEach((child: any) => {
-                  if (child && child.name) {
-                    // Güvenli fiyat dönüşümü
-                    const childPriceNum = parseFloat(child.price || 0);
-                    const childPrice = childPriceNum > 0 ? ` (+${childPriceNum.toFixed(2)} ₺)` : '';
-                    const isUnwanted = child.name.toLowerCase().includes('istemiyorum');
-                    const symbol = isUnwanted ? '✗' : '→';
-                    const color = isUnwanted ? '#f44336' : '#4CAF50';
-                    
-                    productHtml += `<div style="padding-left: 20px; margin: 3px 0; color: ${color}; font-size: 15px;">
-                      <span style="font-weight: bold;">${symbol}</span> ${child.name}${childPrice}
-                    </div>`;
-                  }
-                });
-              }
-            }
-          });
-          productHtml += '</td></tr>';
-        }
+      if (products.length === 0) {
+        // Ürün yoksa uyarı mesajı ekle
+        productsHtmlParts.push(`
+          <tr>
+            <td colspan="3" style="text-align: center; padding: 10px; color: red;">
+              Ürün bilgisi bulunamadı!
+            </td>
+          </tr>
+        `);
+      } else {
+        // Ürünleri döngüyle işle
+        productsHtmlParts = products.map((product: any) => {
+          let productHtml = `
+            <tr>
+              <td class="product-name">${product.name || ''}</td>
+              <td class="quantity">${product.quantity || 1}</td>
+              <td style="text-align: right;">${product.price?.toFixed(2) || '0.00'} ₺</td>
+            </tr>
+          `;
 
-        return productHtml;
-      }).join('');
-    } else if (order.type === 'MIGROS') {
-      // Ana Angular projeden: Migros ürün detayları
-      productsHtml = products.map(product => {
-        let productHtml = `
-        <tr>
-          <td class="product-name">${OrderService.getProductName(product)}</td>
-          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
-          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
-        </tr>`;
+          // Eğer ürün toppings dizisi varsa bu bilgileri ekle
+          if (Array.isArray(product.toppings) && product.toppings.length > 0) {
+            productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
 
-        // Ana Angular projeden: Migros Options
-        if (product.options && product.options.length > 0) {
-          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
-          
-          product.options.forEach((option: any) => {
-            if (option.headerName) {
-              productHtml += `<div style="margin: 5px 0; font-weight: bold; color: #333; font-size: 16px;">${option.headerName}</div>`;
-            }
-            
-            if (option.itemNames) {
-              const priceNum = parseFloat(option.primaryDiscountedPrice || 0);
-              const price = priceNum > 0 ? ` (+${(priceNum / 100).toFixed(2)} ₺)` : '';
-              productHtml += `<div style="margin: 3px 0; padding-left: 10px; color: #4CAF50; font-size: 15px;"><span style="font-weight: bold;">✓</span> ${option.itemNames}${price}</div>`;
-            }
-            
-            // Ana Angular projeden: Migros SubOptions (KRITIK!)
-            if (option.subOptions && option.subOptions.length > 0) {
-              option.subOptions.forEach((subOption: any) => {
-                const isUnwanted = subOption.itemNames?.toLowerCase().includes('istemiyorum') || 
-                                 subOption.optionType === 'INGREDIENT';
-                const symbol = isUnwanted ? '✗' : '✓';
-                const color = isUnwanted ? '#f44336' : '#4CAF50';
-                const priceNum = parseFloat(subOption.primaryDiscountedPrice || 0);
-                const price = priceNum > 0 ? ` (+${(priceNum / 100).toFixed(2)} ₺)` : '';
-                
-                productHtml += `<div style="margin: 3px 0; padding-left: 20px; color: ${color}; font-size: 14px;">
-                  <span style="font-weight: bold;">${symbol}</span> ${subOption.headerName || ''}: ${subOption.itemNames || ''}${price}
-                </div>`;
-              });
-            }
-          });
-          
-          productHtml += '</td></tr>';
-        }
+            product.toppings.forEach((topping: any) => {
+              if (topping && topping.name) {
+                productHtml += `<div style="margin: 2px 0;"><span style="font-weight: bold;">•</span> ${topping.name}</div>`;
 
-        return productHtml;
-      }).join('');
-    } else if (order.type === 'TRENDYOL') {
-      // Ana Angular projeden: Trendyol ürün detayları
-      productsHtml = products.map(product => {
-        let productHtml = `
-        <tr>
-          <td class="product-name">${OrderService.getProductName(product)}</td>
-          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
-          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
-        </tr>`;
-
-        // Ana Angular projeden: Trendyol Modifier Products
-        if (product.modifierProducts && product.modifierProducts.length > 0) {
-          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
-          product.modifierProducts.forEach((modifier: any) => {
-            const modifierName = modifier.name || '';
-            const isUnwanted = modifierName.toLowerCase().includes('istemiyorum');
-            const priceNum = parseFloat(modifier.price || 0);
-            const price = priceNum > 0 ? ` (+${priceNum.toFixed(2)} ₺)` : '';
-            
-            if (isUnwanted) {
-              productHtml += `<div style="margin: 3px 0; color: #f44336; text-decoration: line-through; font-size: 15px;">
-                <span style="font-weight: bold;">⊖</span> ${modifierName}
-              </div>`;
-            } else {
-              productHtml += `<div style="margin: 3px 0; color: #4CAF50; font-size: 15px;">
-                <span style="font-weight: bold;">•</span> ${modifierName}${price}
-              </div>`;
-            }
-            
-            // Ana Angular projeden: SubModifiers (alt seçenekler)
-            if (modifier.subModifiers && modifier.subModifiers.length > 0) {
-              modifier.subModifiers.forEach((subModifier: any) => {
-                const subName = subModifier.name || '';
-                const subPriceNum = parseFloat(subModifier.price || 0);
-                const subPrice = subPriceNum > 0 ? ` (+${subPriceNum.toFixed(2)} ₺)` : '';
-                const isSubUnwanted = subName.toLowerCase().includes('istemiyorum');
-                
-                if (isSubUnwanted) {
-                  productHtml += `<div style="padding-left: 20px; margin: 3px 0; color: #f44336; text-decoration: line-through; font-size: 14px;">
-                    <span style="font-weight: bold;">⊖</span> ${subName}
-                  </div>`;
-                } else {
-                  productHtml += `<div style="padding-left: 20px; margin: 3px 0; color: #666; font-size: 14px;">
-                    <span style="font-weight: bold;">→</span> ${subName}${subPrice}
-                  </div>`;
+                // Alt seçenekleri (children) ekle
+                if (Array.isArray(topping.children) && topping.children.length > 0) {
+                  topping.children.forEach((child: any) => {
+                    if (child && child.name) {
+                      const priceText = child.price && child.price > 0 ? ` (+${child.price} ₺)` : '';
+                      productHtml += `<div style="padding-left: 15px; margin: 2px 0;"><span style="font-weight: bold;">→</span> ${child.name}${priceText}</div>`;
+                    }
+                  });
                 }
-              });
-            }
-          });
-          productHtml += '</td></tr>';
-        }
+              }
+            });
 
-        return productHtml;
-      }).join('');
+            productHtml += '</td></tr>';
+          }
+
+          // Eğer seçili toppings dizisi varsa bu bilgileri de ekle
+          if (Array.isArray(product.selectedToppings) && product.selectedToppings.length > 0) {
+            productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+
+            product.selectedToppings.forEach((topping: any) => {
+              if (topping && topping.name) {
+                productHtml += `<div style="margin: 2px 0; color: #4CAF50;"><span style="font-weight: bold;">✓</span> ${topping.name}</div>`;
+
+                // Alt seçenekleri (children) ekle
+                if (Array.isArray(topping.children) && topping.children.length > 0) {
+                  topping.children.forEach((child: any) => {
+                    if (child && child.name) {
+                      const priceText = child.price && child.price > 0 ? ` (+${child.price} ₺)` : '';
+                      productHtml += `<div style="padding-left: 15px; margin: 2px 0; color: #4CAF50;"><span style="font-weight: bold;">✓</span> ${child.name}${priceText}</div>`;
+                    }
+                  });
+                }
+              }
+            });
+
+            productHtml += '</td></tr>';
+          }
+
+          return productHtml;
+        });
+      }
     } else if (order.type === 'GETIR') {
-      // Ana Angular projeden: Getir ürün detayları
-      productsHtml = products.map(product => {
-        let productHtml = `
-        <tr>
-          <td class="product-name">${OrderService.getProductName(product)}</td>
-          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
-          <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
-        </tr>`;
+      // Getir için ürün bilgilerini HTML'ye dönüştür
+      const products = OrderService.getProducts(order);
 
-        // Getir Options
+      productsHtmlParts = products.map(product => {
+        let productHtml = `
+          <tr>
+            <td class="product-name">${product.name || ''}</td>
+            <td class="quantity">${product.quantity || 1}</td>
+            <td style="text-align: right;">${(product.price || 0).toFixed(2)} ₺</td>
+          </tr>
+        `;
+
+        // Ürün seçeneklerini ekle
         if (product.options && product.options.length > 0) {
           productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
-          
+
+          // Her bir kategori için (Burger Tercihi, Patates Kızartması Tercihi, İçecek Tercihi vb.)
           product.options.forEach((category: any) => {
-            if (category.name) {
-              productHtml += `<div style="margin: 4px 0; font-weight: bold; color: #333;">${category.name.tr || category.name.en || ''}</div>`;
+            const categoryName = category.name?.tr || category.name?.en || '';
+            if (categoryName) {
+              productHtml += `<div style="font-weight: bold; margin-top: 8px;">${categoryName}:</div>`;
             }
-            
+
+            // Kategori seçenekleri (Mega Köfte Burger, Büyük Patates Kızartması, Pepsi vb.)
             if (category.options && category.options.length > 0) {
               category.options.forEach((option: any) => {
-                const price = option.price > 0 ? ` (+${option.price.toFixed(2)} ₺)` : '';
-                productHtml += `<div style="margin: 2px 0; padding-left: 10px; color: #4CAF50;">
-                  <span style="font-weight: bold;">✓</span> ${option.name?.tr || option.name?.en || ''}${price}
-                </div>`;
-                
-                // Option Categories (çıkarılacak malzemeler)
+                const optionName = option.name?.tr || option.name?.en || '';
+                const priceText = option.price && option.price > 0 ? ` (+${option.price} ₺)` : '';
+
+                productHtml += `<div style="padding-left: 15px; margin: 4px 0;"><span style="font-weight: bold;">•</span> ${optionName}${priceText}</div>`;
+
+                // Eşleştirme bilgisini göster
+                if (option.mapping?.localProduct) {
+                  productHtml += `<div style="padding-left: 30px; color: #4CAF50; font-size: 14px;">${option.mapping.localProduct.urunAdi}</div>`;
+                }
+
+                // Alt kategorileri işle (Çıkarılacak Malzeme Tercihi, Sos Tercihi vb.)
                 if (option.optionCategories && option.optionCategories.length > 0) {
-                  option.optionCategories.forEach((optCat: any) => {
-                    if (optCat.options && optCat.options.length > 0) {
-                      optCat.options.forEach((subOpt: any) => {
-                        const isRemoved = subOpt.name?.tr?.toLowerCase().includes('çıkar') || 
-                                         subOpt.name?.en?.toLowerCase().includes('remove');
-                        const symbol = isRemoved ? '✗' : '✓';
-                        const color = isRemoved ? '#f44336' : '#4CAF50';
-                        const subPrice = subOpt.price > 0 ? ` (+${subOpt.price.toFixed(2)} ₺)` : '';
-                        
-                        productHtml += `<div style="padding-left: 20px; margin: 2px 0; color: ${color};">
-                          <span style="font-weight: bold;">${symbol}</span> ${subOpt.name?.tr || subOpt.name?.en || ''}${subPrice}
-                        </div>`;
+                  option.optionCategories.forEach((optionCategory: any) => {
+                    const subCategoryName = optionCategory.name?.tr || optionCategory.name?.en || '';
+                    const isUnwantedCategory = subCategoryName.includes('Çıkarılacak') || subCategoryName.includes('Remove');
+
+                    if (subCategoryName && optionCategory.options && optionCategory.options.length > 0) {
+                      // Kategori başlığını ekle
+                      productHtml += `<div style="padding-left: 30px; margin-top: 6px; font-weight: bold; ${isUnwantedCategory ? 'color: #E53935;' : ''}">${subCategoryName}:</div>`;
+
+                      // Alt kategori seçeneklerini ekle (Mayonez, Ketçap, vb.)
+                      optionCategory.options.forEach((subOption: any) => {
+                        const subOptionName = subOption.name?.tr || subOption.name?.en || '';
+                        const subPriceText = subOption.price && subOption.price > 0 ? ` (+${subOption.price} ₺)` : '';
+
+                        if (isUnwantedCategory) {
+                          // İstenmeyen malzemeleri kırmızı renkte göster
+                          productHtml += `<div style="padding-left: 45px; margin: 2px 0; color: #E53935;"><span style="font-weight: bold;">•</span> ${subOptionName}</div>`;
+                        } else {
+                          // Normal seçimleri göster
+                          productHtml += `<div style="padding-left: 45px; margin: 2px 0;"><span style="font-weight: bold;">•</span> ${subOptionName}${subPriceText}</div>`;
+                        }
                       });
                     }
                   });
@@ -942,21 +927,142 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
               });
             }
           });
-          
+
           productHtml += '</td></tr>';
         }
 
         return productHtml;
-      }).join('');
-    } else {
-      // Diğer platformlar için basit liste
-      productsHtml = products.map(product => `
+      });
+    } else if (order.type === 'TRENDYOL') {
+      // Trendyol için ürün bilgilerini HTML'ye dönüştür
+      const products = OrderService.getProducts(order);
+      productsHtmlParts = products.map(product => {
+        let productHtml = `
+          <tr>
+            <td class="product-name">${product.name || ''}</td>
+            <td class="quantity">${product.quantity || 1}</td>
+            <td style="text-align: right;">${product.price?.toFixed(2) || '0.00'} ₺</td>
+          </tr>
+        `;
+
+        // Modifier bilgilerini ekle
+        if (Array.isArray(product.modifierProducts) && product.modifierProducts.length > 0) {
+          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+
+          product.modifierProducts.forEach((modifier: any) => {
+            // "İstemiyorum" içerenleri farklı göster
+            if (modifier.isUnwanted) {
+              productHtml += `<div style="color: #E53935; margin: 2px 0;"><span style="font-weight: bold;">⊖</span> ${modifier.name || ''}</div>`;
+            } else {
+              productHtml += `<div style="margin: 2px 0;"><span style="font-weight: bold;">•</span> ${modifier.name || ''}</div>`;
+
+              // Alt modifierları ekle
+              if (Array.isArray(modifier.modifierProducts) && modifier.modifierProducts.length > 0) {
+                modifier.modifierProducts.forEach((subMod: any) => {
+                  if (subMod.isUnwanted) {
+                    productHtml += `<div style="color: #E53935; padding-left: 15px; margin: 2px 0;"><span style="font-weight: bold;">⊖</span> ${subMod.name || ''}</div>`;
+                  } else {
+                    productHtml += `<div style="padding-left: 15px; margin: 2px 0;"><span style="font-weight: bold;">→</span> ${subMod.name || ''}</div>`;
+                  }
+                });
+              }
+            }
+          });
+
+          productHtml += '</td></tr>';
+        }
+
+        // Promosyonları ekle
+        if (product.promotions && product.promotions.length > 0) {
+          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+          productHtml += '<div style="margin-top: 5px; font-weight: bold;">Promosyonlar:</div>';
+
+          product.promotions.forEach((promo: any) => {
+            productHtml += `<div style="color: #4CAF50; padding-left: 15px; margin: 2px 0;"><span style="font-weight: bold;">•</span> ${promo.description || ''}</div>`;
+          });
+
+          productHtml += '</td></tr>';
+        }
+
+        return productHtml;
+      });
+    } else if (order.type === 'MIGROS') {
+      // Migros için ürün bilgilerini HTML'ye dönüştür - Ana Angular'dan
+      const products = OrderService.getProducts(order);
+      productsHtmlParts = products.map(product => {
+        let productHtml = `
+      <tr>
+        <td class="product-name">${product.name || ''}</td>
+        <td class="quantity">${product.amount || product.quantity || 1}</td>
+        <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
+      </tr>
+    `;
+
+        // Migros'a özel options yapısını işle
+        if (product.options && Array.isArray(product.options) && product.options.length > 0) {
+          productHtml += '<tr><td colspan="3" style="padding-left: 15px;">';
+
+          product.options.forEach((option: any) => {
+            // Option başlığı ve içerik
+            productHtml += `<div style="font-weight:bold;">${option.headerName}:</div>`;
+            productHtml += `<div style="padding-left:10px;">• ${option.itemNames}</div>`;
+
+            // Mapping göster
+            if (option.mapping?.localProduct) {
+              productHtml += `<div style="padding-left:20px; color:#4CAF50;">${option.mapping.localProduct.urunAdi}</div>`;
+            }
+
+            // Fiyat göster
+            if (option.primaryDiscountedPrice > 0) {
+              productHtml += `<div style="padding-left:20px; color:#888;">(+${option.primaryDiscountedPriceText})</div>`;
+            }
+
+            // SubOptions işle
+            if (option.subOptions && option.subOptions.length > 0) {
+              option.subOptions.forEach((subOption: any) => {
+                productHtml += `<div style="padding-left:20px; font-weight:bold;">${subOption.headerName}:</div>`;
+                productHtml += `<div style="padding-left:30px;">• ${subOption.itemNames}</div>`;
+
+                const normalizedItemName = (subOption.itemNames || '').toString().toLowerCase()
+                  .replace(/i̇/g, 'i')
+                  .replace(/ı/g, 'i')
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '');
+
+                const hasEkstra = normalizedItemName.includes("ekstra");
+                const hasIstemiyorum = normalizedItemName.includes("istemiyorum");
+                // Mapping göster
+                if (!hasEkstra && !hasIstemiyorum) {
+                  if (subOption.mapping?.localProduct) {
+                    productHtml += `<div style="padding-left:40px; color:#4CAF50;">${subOption.mapping.localProduct.urunAdi}</div>`;
+                  }
+                }
+
+                // Fiyat göster
+                if (subOption.primaryDiscountedPrice > 0) {
+                  productHtml += `<div style="padding-left:40px; color:#888;">(+${subOption.primaryDiscountedPriceText})</div>`;
+                }
+              });
+            }
+          });
+
+          productHtml += '</td></tr>';
+        }
+
+        return productHtml;
+      });
+    }
+
+    // Diğer platformlar için basit ürün listesi
+    if (!productsHtmlParts.length && order.type !== 'YEMEKSEPETI' && order.type !== 'GETIR' && order.type !== 'TRENDYOL' && order.type !== 'MIGROS') {
+      const products = OrderService.getProducts(order);
+      productsHtmlParts = products.map(product => `
         <tr>
-          <td class="product-name">${OrderService.getProductName(product)}</td>
-          <td class="quantity">${OrderService.getProductQuantity(product)}</td>
+          <td class="product-name">${product.name || ''}</td>
+          <td class="quantity">${product.quantity || 1}</td>
           <td class="price">${(product.price || 0).toFixed(2)} ₺</td>
         </tr>
-      `).join('');
+      `);
     }
 
     return `
@@ -966,44 +1072,63 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
 <meta charset="utf-8">
 <title>Sipariş #${orderId}</title>
 <style>
-body { font-family: 'Courier New', monospace; font-size: 20px; max-width: 72mm; margin: 0 auto; padding: 8px; line-height: 1.6; }
-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-th, td { text-align: left; padding: 6px 4px; font-size: 18px; vertical-align: top; }
-.header { text-align: center; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #000; }
-.order-id { font-size: 28px; font-weight: bold; margin-bottom: 8px; }
-.section-title { font-size: 22px; font-weight: bold; border-bottom: 1px solid #000; margin: 18px 0 10px; padding-bottom: 4px; }
-.product-name { font-size: 20px; font-weight: bold; }
-.quantity { text-align: center; font-weight: bold; font-size: 20px; }
-.price { text-align: right; font-weight: bold; font-size: 20px; }
-.total-row { font-weight: bold; font-size: 22px; padding: 8px 0; }
-.customer-info { font-size: 20px; }
-.label { font-weight: bold; width: 30%; font-size: 20px; }
-.customer-value { font-size: 20px; }
+body{font-family:Arial,sans-serif;font-size:18px;max-width:72mm;margin:0 auto;padding:0}
+table{width:100%;border-collapse:collapse;margin-bottom:10px}
+th,td{text-align:left;padding:4px;font-size:18px}
+.header{text-align:center;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #000}
+.order-id{font-size:20px;font-weight:bold}
+.order-source{font-size:18px;font-weight:bold;margin-top:5px}
+.order-type{font-size:18px;font-weight:bold;margin-top:4px}
+.section-title{font-size:19px;font-weight:bold;border-bottom:1px solid #000;margin:10px 0 5px}
+.product-name{font-size:18px;font-weight:bold}
+.product-option{font-size:16px;padding-left:7px}
+.quantity{text-align:center;font-weight:bold;font-size:18px}
+.label{font-weight:bold;width:100px;font-size:18px}
+.customer-value{font-size:18px;font-weight:normal}
+.total-row{font-weight:bold;font-size:18px}
+.logo-container{text-align:center;margin-bottom:10px}
+.logo{max-width:80px;max-height:40px;display:inline-block}
+.price{text-align:right;font-weight:bold;font-size:18px}
 </style>
 </head>
 <body>
 
+<div class="logo-container">
+  <img src="${window.location.origin}${OrderService.getPlatformLogo(order.type)}" alt="${orderSource}" class="logo">
+</div>
+
 <div class="header">
-  <div class="order-id">Sipariş #${orderId}</div>
-  <div style="font-size: 18px; font-weight: bold;">${orderSource}</div>
-  <div style="font-size: 16px;">${orderType}</div>
-  <div style="font-size: 14px; margin-top: 4px;">${formatDate(order.createdAt)}</div>
+<div class="order-id">Sipariş #${orderId}</div>
+<div class="order-source">${orderSource}</div>
+<div class="order-type">${orderType}</div>
+<div style="font-size:16px">${formatDate(order.createdAt)}</div>
+<div style="font-size:16px">${OrderService.getStatusText(order.status)}</div>
 </div>
 
 <div class="section-title">Müşteri Bilgileri</div>
-<table class="customer-info">
-<tr><td class="label">Ad Soyad:</td><td class="customer-value">${customerName}</td></tr>
-<tr><td class="label">Telefon:</td><td class="customer-value">${customerPhone}</td></tr>
-${address.address ? `<tr><td class="label">Adres:</td><td class="customer-value">${address.address}</td></tr>` : ''}
-${address.doorNo ? `<tr><td class="label">Kapı No:</td><td class="customer-value">${address.doorNo}</td></tr>` : ''}
-${address.floor ? `<tr><td class="label">Kat:</td><td class="customer-value">${address.floor}</td></tr>` : ''}
-${customerNote ? `<tr><td class="label">Sipariş Notu:</td><td class="customer-value">${customerNote}</td></tr>` : ''}
+<table>
+<tr><td class="label">Ad Soyad:</td><td class="customer-value">${OrderService.getCustomerName(order)}</td></tr>
+${order.type === 'GETIR' && order.rawData?.client?.clientPhoneNumber ?
+  `<tr><td class="label">Müşteri Tel:</td><td class="customer-value">${order.rawData.client.clientPhoneNumber}</td></tr>` :
+  `<tr><td class="label">Telefon:</td><td class="customer-value">${OrderService.getCustomerPhone(order)}</td></tr>`}
+${OrderService.getDeliveryAddress(order).address ?
+  `<tr><td class="label">Adres:</td><td class="customer-value">${OrderService.getDeliveryAddress(order).address}</td></tr>` : ''}
+${OrderService.getDeliveryAddress(order).doorNo ?
+  `<tr><td class="label">Kapı No:</td><td class="customer-value">${OrderService.getDeliveryAddress(order).doorNo}</td></tr>` : ''}
+${OrderService.getDeliveryAddress(order).floor ?
+  `<tr><td class="label">Kat:</td><td class="customer-value">${OrderService.getDeliveryAddress(order).floor}</td></tr>` : ''}
+${order.type === 'TRENDYOL' && order.rawData?.deliveryType === 'GO' ?
+  `<tr><td class="label">Teslimat:</td><td class="customer-value">Trendyol GO ile Teslimat</td></tr>` : ''}
+${customerNote ?
+  `<tr><td class="label">Sipariş Notu:</td><td class="customer-value">${customerNote}</td></tr>` : ''}
+${order.type === 'GETIR' && order.rawData?.confirmationId ?
+  `<tr><td class="label">Onay No:</td><td class="customer-value">${order.rawData.confirmationId}</td></tr>` : ''}
 </table>
 
 <div class="section-title">Ürünler</div>
 <table>
 <tr><th style="width:55%;font-size:16px">Ürün</th><th style="width:15%;font-size:16px">Adet</th><th style="width:30%;font-size:16px;text-align:right">Fiyat</th></tr>
-${productsHtml}
+${productsHtmlParts.join('')}
 </table>
 
 <table style="margin-top:10px;border-top:1px solid #000">

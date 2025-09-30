@@ -58,14 +58,17 @@ class Main {
     
     // Asset path handler
     ipcMain.handle('get-asset-path', (event, relativePath) => {
-      if (isDev) {
-        return `http://localhost:3002/assets/${relativePath}`;
+      if (isDev || !isPackaged) {
+        // Development'ta HTTP URL döndür
+        const devUrl = `http://localhost:3002/assets/${relativePath}`;
+        console.log('📁 Development asset path:', devUrl);
+        return devUrl;
       } else {
         // Production'da extraResources klasöründeki assets'i kullan
         const resourcesPath = process.resourcesPath;
         const assetPath = path.join(resourcesPath, 'assets', relativePath);
         const fileUrl = `file:///${assetPath.replace(/\\/g, '/')}`;
-        console.log('📁 Asset path:', assetPath, '-> URL:', fileUrl);
+        console.log('📁 Production asset path:', assetPath, '-> URL:', fileUrl);
         return fileUrl;
       }
     });

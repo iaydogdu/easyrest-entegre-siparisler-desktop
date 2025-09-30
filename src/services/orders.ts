@@ -339,46 +339,29 @@ export class OrderService {
     }
   }
 
+  // Ana Angular projeden: getCustomerName (birebir kopya)
   static getCustomerName(order: Order): string {
-    if (!order?.rawData) return 'Müşteri Bilgisi Yok';
+    if (!order?.rawData) return '';
 
-    let customerName = '';
-
-    try {
-      switch (order.type) {
-        case 'YEMEKSEPETI':
-          const ysCustomer = order.rawData.customer;
-          customerName = `${ysCustomer?.firstName || ''} ${ysCustomer?.lastName || ''}`.trim();
-          break;
-          
-        case 'GETIR':
-          customerName = order.rawData.client?.name || '';
-          break;
-          
-        case 'TRENDYOL':
-          const tyCustomer = order.rawData.customer;
-          customerName = `${tyCustomer?.firstName || ''} ${tyCustomer?.lastName || ''}`.trim();
-          break;
-          
-        case 'MIGROS':
-          customerName = OrderService.getMigrosCustomerName(order);
-          break;
-          
-        default:
-          console.warn(`⚠️ Bilinmeyen platform: ${order.type}`);
+    if (order.type === 'YEMEKSEPETI') {
+      const customer = order.rawData.customer;
+      return `${customer?.firstName || ''} ${customer?.lastName || ''}`;
+    } else if (order.type === 'GETIR') {
+      return order.rawData.client?.name || '';
+    } else if (order.type === 'TRENDYOL') {
+      const customer = order.rawData.customer;
+      return `${customer?.firstName || ''} ${customer?.lastName || ''}`;
+    } else if (order.type === 'MIGROS') {
+      // Önce customerInfo'dan deneyelim, sonra customer'dan
+      if (order.rawData.customerInfo?.name) {
+        return order.rawData.customerInfo.name;
+      } else if (order.rawData.customer) {
+        const customer: any = order.rawData.customer;
+        return customer.fullName || `${customer.firstName || ''} ${customer.lastName || ''}`;
       }
-
-      if (!customerName) {
-        console.warn(`⚠️ Müşteri adı bulunamadı (${order.type}):`, OrderService.getOrderId(order));
-        customerName = 'Müşteri Bilgisi Yok';
-      }
-
-    } catch (error) {
-      console.error(`❌ Müşteri adı alma hatası (${order.type}):`, error, order);
-      customerName = 'Müşteri Bilgisi Hatası';
+      return '';
     }
-
-    return customerName;
+    return '';
   }
 
   // Migros müşteri adı alma (gelişmiş)
@@ -424,32 +407,53 @@ export class OrderService {
     return 'Müşteri Bilgisi Yok';
   }
 
-  // Ürün listesi alma (platform-specific)
-  static getProducts(order: Order): any[] {
+  // Ana Angular projeden: getProducts (birebir kopya)
+  static getProducts(order: Order | null): any[] {
     if (!order?.rawData) return [];
 
-    try {
-      switch (order.type) {
-        case 'YEMEKSEPETI':
-          return order.rawData.products || [];
-          
-        case 'GETIR':
-          return order.rawData.products || [];
-          
-        case 'TRENDYOL':
-          return order.rawData.lines || [];
-          
-        case 'MIGROS':
-          return order.rawData.items || order.rawData.products || [];
-          
-        default:
-          console.warn(`⚠️ Bilinmeyen platform için ürün listesi: ${order.type}`);
-          return [];
+    if (order.type === 'YEMEKSEPETI') {
+      if (Array.isArray(order.rawData.products)) {
+        return order.rawData.products;
       }
-    } catch (error) {
-      console.error(`❌ Ürün listesi alma hatası (${order.type}):`, error);
       return [];
     }
+    else if (order.type === 'TRENDYOL') {
+      if (Array.isArray(order.rawData.lines)) {
+        // Her bir ürün için items dizisinin uzunluğunu miktar olarak ekleyelim
+        return order.rawData.lines.map((line: any) => {
+          // Ürün nesnesini değiştirmeden önce kopyasını oluştur
+          const processedLine = { ...line };
+
+          // Eğer items dizisi varsa, uzunluğunu quantity olarak ekle
+          if (Array.isArray(processedLine.items) && processedLine.items.length > 0) {
+            processedLine.quantity = processedLine.items.length;
+          } else {
+            // Varsayılan miktar
+            processedLine.quantity = 1;
+          }
+
+          return processedLine;
+        });
+      }
+      return [];
+    }
+    else if (order.type === 'GETIR') {
+      if (Array.isArray(order.rawData.products)) {
+        return order.rawData.products;
+      }
+      return [];
+    }
+    else if (order.type === 'MIGROS') {
+      // Migros için önce items'ı kontrol et, yoksa products array'ini kullan
+      if (Array.isArray(order.rawData.items)) {
+        return order.rawData.items;
+      }
+      else if (Array.isArray((order.rawData as any).products)) {
+        return (order.rawData as any).products;
+      }
+      return [];
+    }
+    return [];
   }
 
   // Ürün adı alma (platform-specific)
@@ -610,68 +614,6 @@ export class OrderService {
     return 0;
   }
 
-  static getStatusText(status: string | number | undefined): string {
-    // Ana Angular projeden: Güvenli null kontrolü
-    if (!status) return 'Durum Belirsiz';
-
-    const statusStr = status.toString().toLowerCase();
-    
-    // Ana Angular projeden: Platform-agnostic status'lar
-    const commonStatuses: { [key: string]: string } = {
-      'new': 'Yeni Sipariş',
-      'received': 'Yeni Sipariş',
-      'accepted': 'Onaylandı',
-      'rejected': 'Reddedildi',
-      'cancelled': 'İptal Edildi',
-      'completed': 'Tamamlandı',
-      'delivered': 'Teslim Edildi',
-      'processed': 'Yeni Sipariş',
-      'preparing': 'Hazırlanıyor',
-      'ready': 'Hazır',
-      'onaylandi': 'Onaylandı',
-      'hazirlanyor': 'Hazırlanıyor'
-    };
-
-    if (commonStatuses[statusStr]) {
-      return commonStatuses[statusStr];
-    }
-
-    // Ana Angular projeden: Platform-specific status'lar
-    
-    // Getir status'ları
-    if (['400', '325', '1600'].includes(statusStr)) {
-      if (statusStr === '400') return 'Yeni Sipariş';
-      if (statusStr === '325') return 'İleri Tarihli Sipariş';
-      if (statusStr === '1600') return 'İleri Tarihli Hatırlatma';
-    }
-    
-    if (statusStr === '200') return 'Onaylandı';
-    if (['700', '800'].includes(statusStr)) return 'Tamamlandı';
-
-    // YemekSepeti status'ları
-    if (statusStr === 'processed') return 'Yeni Sipariş';
-
-    // Trendyol status'ları
-    if (statusStr === 'created') return 'Yeni Sipariş';
-    if (['preparing', 'picking'].includes(statusStr)) return 'Hazırlanıyor';
-    if (statusStr === 'invoiced') return 'Fatura Kesildi';
-    if (statusStr === 'shipped') return 'Gönderildi';
-    if (statusStr === 'unsupplied') return 'Tedarik Edilemedi';
-
-    // Migros status'ları
-    if (statusStr === 'new_pending') return 'Yeni Sipariş';
-    if (statusStr === 'approved') return 'Onaylandı';
-    if (statusStr === 'cancelled_by_customer') return 'Müşteri İptal Etti';
-    if (statusStr === 'cancelled_by_restaurant') return 'Restoran İptal Etti';
-
-    // Ana Angular projeden: Keyword-based fallback
-    if (statusStr.includes('new')) return 'Yeni Sipariş';
-    if (statusStr.includes('approve')) return 'Onaylandı';
-    if (statusStr.includes('cancel')) return 'İptal Edildi';
-    if (statusStr.includes('pending')) return 'Bekliyor';
-
-    return `Durum: ${status}`;
-  }
 
   // Logo cache for async loading
   private static logoCache: { [key: string]: string } = {};
@@ -682,7 +624,7 @@ export class OrderService {
       return this.logoCache[type];
     }
 
-    // Electron desktop app için dynamic path
+    // Electron API kullan (artık doğru path döndürüyor)
     const isElectron = typeof window !== 'undefined' && window.electronAPI;
     if (isElectron && (window.electronAPI as any).getAssetPath) {
       // Async olarak yükle ve cache'le
@@ -695,6 +637,7 @@ export class OrderService {
       
       const logoFile = logoFiles[type] || 'images/logo.svg';
       (window.electronAPI as any).getAssetPath(logoFile).then((path: string) => {
+        console.log(`🏷️ Electron logo path (${type}):`, path);
         this.logoCache[type] = path;
         // Force re-render by triggering a custom event
         window.dispatchEvent(new CustomEvent('logo-loaded', { detail: { type, path } }));
@@ -703,8 +646,8 @@ export class OrderService {
       // Fallback olarak default logo döndür
       return '/assets/images/logo.svg';
     } else {
-      // Web browser için absolute path
-      const basePath = '/assets/images';
+      // Web browser için fallback path
+      const basePath = `${process.env.PUBLIC_URL || ''}/assets/images`;
       const logoMap: { [key: string]: string } = {
         'YEMEKSEPETI': `${basePath}/yemek-sepeti.png`,
         'TRENDYOL': `${basePath}/trendyollogo.png`,
@@ -713,6 +656,7 @@ export class OrderService {
       };
       
       const logoPath = logoMap[type] || `${basePath}/logo.svg`;
+      console.log(`🏷️ Browser logo path (${type}):`, logoPath);
       this.logoCache[type] = logoPath;
       return logoPath;
     }
@@ -2147,5 +2091,106 @@ export class OrderService {
     }
     
     return isNew;
+  }
+
+  // Ana Angular projeden: getSourceLogo
+  static getSourceLogo(type: string | undefined): string {
+    if (!type) return `${process.env.PUBLIC_URL || ''}/assets/images/logo.svg`;
+
+    const basePath = `${process.env.PUBLIC_URL || ''}/assets/images`;
+    switch (type.toUpperCase()) {
+      case 'YEMEKSEPETI':
+        return `${basePath}/yemek-sepeti.png`;
+      case 'TRENDYOL':
+        return `${basePath}/trendyollogo.png`;
+      case 'MIGROS':
+        return `${basePath}/migros-yemek.png`;
+      case 'GETIR':
+        return `${basePath}/getir.png`;
+      default:
+        return `${basePath}/logo.svg`;
+    }
+  }
+
+  // Ana Angular projeden: getStatusText
+  static getStatusText(status: string | number | undefined, order?: any): string {
+    if (!status) return 'Durum Belirsiz';
+
+    const statusStr = status.toString().toLowerCase();
+    switch (statusStr) {
+      case 'received':
+      case '400': // Getir için
+        return 'Yeni Sipariş';
+      case '325': // Getir için ileri tarihli
+        return order?.rawData?.isScheduled ? 'İleri Tarihli Sipariş' : 'Yeni Sipariş';
+      case '1600': // Getir için ileri tarihli hatırlatma
+        return order?.rawData?.isScheduled ? 'İleri Tarihli Sipariş' : 'Yeni Sipariş';
+      case '200': // Getir için onaylanmış
+        return 'Onaylandı';
+      case 'processed': // YemekSepeti için yeni sipariş
+        return 'Yeni Sipariş';
+      case 'accepted': // YemekSepeti için onaylanmış sipariş
+        return 'Onaylandı';
+      case 'rejected':
+        return 'Reddedildi';
+      case 'new':
+        return 'Yeni Sipariş';
+      // Trendyol durumları
+      case 'created': // Trendyol için yeni sipariş
+        return 'Yeni Sipariş';
+      case 'preparing': // Trendyol için hazırlanıyor
+      case 'picking': // Trendyol için toplama aşamasında
+        return 'Hazırlanıyor';
+      case 'invoiced': // Trendyol için fatura kesildi
+        return 'Fatura Kesildi';
+      case 'cancelled': // Trendyol için iptal edilmiş
+        return 'İptal Edildi';
+      case 'unsupplied': // Trendyol için tedarik edilemedi
+        return 'Tedarik Edilemedi';
+      case 'shipped': // Trendyol için gönderildi
+        return 'Gönderildi';
+      case 'delivered': // Trendyol için teslim edildi
+        return 'Teslim Edildi';
+      // Migros durumları
+      case 'new_pending':
+        return 'Yeni Sipariş';
+      case 'approved':
+        return 'Onaylandı';
+      case 'cancelled_by_customer':
+        return 'Müşteri Tarafından İptal Edildi';
+      case 'cancelled_by_restaurant':
+        return 'Restoran Tarafından İptal Edildi';
+      default:
+        // Eğer durum new kelimesini içeriyorsa, 'Yeni Sipariş' olarak göster
+        if (statusStr.includes('new')) {
+          return 'Yeni Sipariş';
+        }
+        // Eğer durum approve kelimesini içeriyorsa, 'Onaylandı' olarak göster
+        if (statusStr.includes('approve')) {
+          return 'Onaylandı';
+        }
+        // Eğer durum cancel kelimesini içeriyorsa, 'İptal Edildi' olarak göster
+        if (statusStr.includes('cancel')) {
+          return 'İptal Edildi';
+        }
+        // Eğer durum pending kelimesini içeriyorsa, 'Bekliyor' olarak göster
+        if (statusStr.includes('pending')) {
+          return 'Bekliyor';
+        }
+
+        // Siparişin platform tipine göre farklı bir varsayılan değer gösterelim
+        if (order?.type === 'MIGROS') {
+          // Bu Migros siparişi ise, durum metni bulunamadığında durum değerini doğrudan göster
+          return `Sipariş Durumu: ${status}`;
+        }
+
+        return order?.rawData?.isScheduled ? 'İleri Tarihli Sipariş' : 'Durum Belirsiz';
+    }
+  }
+
+  // Ana Angular projeden: formatDate
+  static formatDate(date: string | undefined): string {
+    if (!date) return '';
+    return new Date(date).toLocaleString('tr-TR');
   }
 }
