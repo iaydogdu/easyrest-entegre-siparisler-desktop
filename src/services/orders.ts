@@ -1082,7 +1082,7 @@ export class OrderService {
     };
   }
 
-  // Ana Angular projeden: Trendyol ürün işleme (MD dosyasından)
+  // Ana Angular projeden: Trendyol ürün işleme (tam kopya)
   static processTrendyolProducts(order: Order): any[] {
     if (!Array.isArray(order.rawData.lines)) {
       console.warn('⚠️ Trendyol lines array eksik');
@@ -1092,8 +1092,9 @@ export class OrderService {
     console.log(`🍊 Trendyol ürünleri işleniyor: ${order.rawData.lines.length} line`);
     const urunler = [];
 
-    // İstenmeyen ürünleri filtrele
+    // İstenmeyen ürünleri filtrele - Ana Angular'dan tam kopya
     const mainProducts = order.rawData.lines.filter((line: any) => {
+      // "Promosyon" veya "Ekstra" ile başlayıp "İstemiyorum" ile biten ürünleri filtrele
       if (line.name &&
           (line.name.toLowerCase().startsWith('promosyon') ||
            line.name.toLowerCase().startsWith('ekstra')) &&
@@ -1104,38 +1105,170 @@ export class OrderService {
       return line.mapping?.eslestirilenUrun;
     });
 
+    // Her ana ürün için işlem yap - Ana Angular'dan tam kopya
     for (const mainProduct of mainProducts) {
       const localMainProd = mainProduct.mapping.eslestirilenUrun;
       if (!localMainProd) continue;
 
-      // Miktar hesaplama (items dizisinin uzunluğu)
-      let productQuantity = 1;
+      // Ana ürün items dizisi - Tüm modifierlar bu dizide toplanacak
+      const mainProductItems = [];
+
+      // Miktar bilgisini items dizisinin sayısından al (varsa)
+      let productQuantity = 1; // Varsayılan miktar
       if (Array.isArray(mainProduct.items) && mainProduct.items.length > 0) {
         productQuantity = mainProduct.items.length;
       }
 
-      // Ana ürün objesi
-      const productObj: any = {
+      // Modifier ürünleri işle - Ana Angular'dan tam kopya
+      if (Array.isArray(mainProduct.modifierProducts)) {
+        for (const modifier of mainProduct.modifierProducts) {
+          if (modifier.mapping?.eslestirilenUrun) {
+            const modifierName = modifier.name || '';
+            // Doğrudan name özelliğinde "İstemiyorum" içerip içermediğini kontrol et
+            const isUnwanted = modifierName.toLowerCase().includes('istemiyorum');
+
+            if (isUnwanted) {
+              // İstenmeyen modifier - doğrudan main items içine ekle
+              const unwantedItem = {
+                tip: modifier.mapping.eslestirilenUrunTipi || 'SKU',
+                itemId: modifier.mapping.eslestirilenUrun._id,
+                miktar: 1,
+                birim: 'adet',
+                ekFiyat: 0,
+                selected: true,
+                istenmeyen: true
+              };
+
+              // Doğrudan ana ürünün items dizisine ekle
+              mainProductItems.push(unwantedItem);
+              console.log(`🚫 Trendyol istenmeyen modifier: ${modifierName}`);
+            } else {
+              // Normal modifier (Kadri Burger, Soğan Halkası vb.)
+              const modifierItem = {
+                tip: modifier.mapping.eslestirilenUrunTipi || 'Urun',
+                itemId: modifier.mapping.eslestirilenUrun._id,
+                miktar: 1,
+                birim: 'adet',
+                ekFiyat: 0,
+                selected: true,
+                istenmeyen: false,
+                items: [] as any[], // Alt modifierlar için dizi
+                itemDetails: {
+                  urunAdi: modifier.mapping.eslestirilenUrun.urunAdi,
+                  kategori: {},
+                  altKategori: {},
+                  items: [] as any[], // İstenmeyen alt modifierlar burada toplanacak
+                  urunItems: [] as any[] // Normal alt modifierlar burada
+                }
+              };
+
+              // Alt modifierları kontrol et (örneğin "Domates İstemiyorum")
+              if (Array.isArray(modifier.modifierProducts)) {
+                for (const subMod of modifier.modifierProducts) {
+                  // Doğrudan subMod'un name özelliğini kontrol et
+                  const subName = subMod.name || '';
+                  const subIsUnwanted = subName.toLowerCase().includes('istemiyorum');
+
+                  if (subIsUnwanted && subMod.mapping?.eslestirilenUrun) {
+                    // "İstemiyorum" içeren alt modifier
+                    const unwantedSubItem = {
+                      tip: subMod.mapping.eslestirilenUrunTipi || 'SKU',
+                      itemId: subMod.mapping.eslestirilenUrun._id,
+                      miktar: 1,
+                      birim: 'adet',
+                      ekFiyat: 0,
+                      selected: true,
+                      istenmeyen: true
+                    };
+
+                    // İstenmeyen alt modifier, itemDetails.items'a ekle
+                    modifierItem.itemDetails.items.push(unwantedSubItem);
+                    console.log(`🚫 Trendyol istenmeyen alt modifier: ${subName}`);
+                  } else if (subMod.mapping?.eslestirilenUrun) {
+                    // Normal alt modifier
+                    const subItem = {
+                      tip: subMod.mapping.eslestirilenUrunTipi || 'SKU',
+                      itemId: {
+                        _id: subMod.mapping.eslestirilenUrun._id,
+                        urunAdi: subMod.mapping.eslestirilenUrun.urunAdi
+                      },
+                      miktar: 1,
+                      birim: 'adet',
+                      ekFiyat: 0,
+                      selected: true,
+                      istenmeyen: false,
+                      itemDetails: {
+                        urunAdi: subMod.mapping.eslestirilenUrun.urunAdi,
+                        kategori: {},
+                        altKategori: {},
+                        items: [],
+                        urunItems: []
+                      },
+                      items: []
+                    };
+
+                    console.log("subMod.name.toLowerCase()", subMod.name.toLowerCase());
+
+                    if (subMod.name.toLowerCase().includes("i̇stemiyorum")) {
+                      modifierItem.itemDetails.items.push(subItem);
+                    } else {
+                      // TypeScript için property'leri yeniden assign et
+                      // TypeScript uyumlu yapı
+                      const processedSubItem = {
+                        tip: subMod.mapping.eslestirilenUrunTipi || 'SKU',
+                        itemId: subMod.mapping.eslestirilenUrun._id,
+                        miktar: 1,
+                        birim: 'adet',
+                        ekFiyat: 0,
+                        selected: true,
+                        items: [
+                          {
+                            tip: subMod.mapping.eslestirilenUrunTipi || 'SKU',
+                            itemId: {
+                              _id: subMod.mapping.eslestirilenUrun._id,
+                              urunAdi: subMod.mapping.eslestirilenUrun.urunAdi
+                            },
+                            miktar: 1,
+                            birim: 'adet',
+                            ekFiyat: 0,
+                            selected: true
+                          }
+                        ]
+                      };
+
+                      modifierItem.itemDetails.urunItems.push(processedSubItem);
+                    }
+                    // Normal alt modifierlar urunItems dizisine eklenecek
+                  }
+                }
+              }
+
+              // Ana modifieri main product items'a ekle
+              mainProductItems.push(modifierItem);
+              console.log(`✅ Trendyol normal modifier: ${modifierName}`);
+            }
+          }
+        }
+      }
+
+      // Ana ürün objesi oluştur
+      const mainProductObj = {
         urunId: localMainProd._id,
         urunAdi: localMainProd.urunAdi,
-        miktar: productQuantity,
+        miktar: productQuantity, // items dizisinin sayısını miktar olarak kullan
         vergiliFiyat: mainProduct.price || 0,
         vergisizFiyat: (mainProduct.price || 0) / 1.2,
         isOneriliMenu: false,
         yapildimi: 'gonderildi',
-        items: [] as any[] // Modifier'lar burada toplanacak
+        items: mainProductItems // Tüm modifierları ve istenmeyen öğeleri içerir
       };
 
-      // Modifier products işle
-      if (Array.isArray(mainProduct.modifierProducts)) {
-        const modifierItems = OrderService.processTrendyolModifiers(mainProduct.modifierProducts);
-        productObj.items = modifierItems;
-      }
-
-      urunler.push(productObj);
-      console.log(`✅ Trendyol ürün eklendi: ${localMainProd.urunAdi} x${productQuantity}`);
+      // Ürünler listesine ekle
+      urunler.push(mainProductObj);
+      console.log(`✅ Trendyol ana ürün eklendi: ${localMainProd.urunAdi} x${productQuantity}, modifiers: ${mainProductItems.length}`);
     }
 
+    console.log(`📊 Trendyol ürün işleme tamamlandı: ${urunler.length} ürün`);
     return urunler;
   }
 
@@ -2192,5 +2325,443 @@ export class OrderService {
   static formatDate(date: string | undefined): string {
     if (!date) return '';
     return new Date(date).toLocaleString('tr-TR');
+  }
+
+  // Ana Angular projeden: parseSingleAggregatorTopping (YemekSepeti için)
+  static parseSingleAggregatorTopping(topping: any): any {
+    const aggregatorType = (topping.type || '').toUpperCase(); // "PRODUCT" | "EXTRA"
+
+    // "Promosyon" veya "Ekstra" ile başlayıp "İstemiyorum" ile biten ürünleri filtrele
+    if (topping.name &&
+        (topping.name.toLowerCase().startsWith('promosyon') ||
+            topping.name.toLowerCase().startsWith('ekstra')) &&
+        topping.name.toLowerCase().endsWith('istemiyorum')) {
+        return null;
+    }
+
+    // Mapping kontrolü - Trendyol için eslestirilenUrun, diğerleri için localProduct
+    let localProd;
+    if (topping.mapping?.eslestirilenUrun) {
+        localProd = topping.mapping.eslestirilenUrun;
+    } else if (topping.mapping?.localProduct) {
+        localProd = topping.mapping.localProduct;
+    } else {
+        return null; // Eşleşme yoksa null dön
+    }
+
+    // local type => "Urun"|"Recipe"|"SKU"
+    let localType;
+    if (topping.mapping?.eslestirilenUrunTipi) {
+        localType = topping.mapping.eslestirilenUrunTipi;
+    } else {
+        localType = topping.mapping?.localProductType || 'Recipe';
+    }
+
+    const ekFiyat = parseFloat(topping.price || '0');
+    const nameLower = (topping.name || '').toLowerCase();
+    // İstemiyorum kontrolünü genişlet (İ ve i karakterlerini kontrol etmek için)
+    const isIstemiyorum = nameLower.includes('istemiyorum') || nameLower.includes('i̇stemiyorum');
+
+    // Boş itemSchema oluşturalım
+    const itemSchema = {
+        tip: localType,
+        itemId: localProd._id,
+        miktar: 1,
+        birim: 'adet',
+        ekFiyat,
+        selected: true,
+        istenmeyen: false, // default
+        items: [] as any[],
+        itemDetails: {
+            urunAdi: localProd.urunAdi || topping.name,
+            kategori: {},
+            altKategori: {},
+            items: [] as any[],
+            urunItems: [] as any[]
+        }
+    };
+
+    // aggregatorType => PRODUCT vs EXTRA
+    if (aggregatorType === 'PRODUCT') {
+        // PRODUCT => normalde alt ürün
+        // "İstemiyorum" var mı bakarsın, çoğunlukla yok -> yine de check
+        if (isIstemiyorum) {
+            // Aşırı senaryo, ama belki aggregator'da 'Köfteburger İstemiyorum' gelmiştir
+            itemSchema.istenmeyen = true;
+            itemSchema.selected = true;
+        }
+
+        // Alttaki children'ı parse
+        if (Array.isArray(topping.children)) {
+            // Her bir child => parse
+            for (const child of topping.children) {
+                const c = OrderService.parseSingleAggregatorTopping(child);
+                if (c) {
+                    // c aggregatorType=EXTRA or PRODUCT => bak
+                    const childType = (child.type || '').toUpperCase();
+                    const cName = (child.name || '').toLowerCase();
+
+                    // İstemiyorum kontrolünü genişlet
+                    const cIsIstemiyorum = cName.includes('istemiyorum') || cName.includes('i̇stemiyorum');
+
+                    if (childType === 'EXTRA') {
+                        // "İstemiyorum" => itemDetails.items
+                        // aksi => itemDetails.urunItems
+                        if (cIsIstemiyorum) {
+                            c.istenmeyen = true; // İstemiyorum için true yapıyoruz
+                            itemSchema.itemDetails.items.push(c);
+                        } else {
+                            // Normal ekstralar için istenmeyen false
+                            c.istenmeyen = false;
+                            c.items = c.itemDetails;
+                            c.items.tip = c.tip;
+                            c.items.selected = true;
+                            c.items.ekFiyat = c.ekFiyat;
+                            c.ekFiyat = 0;
+                            c.items.itemId = {
+                                _id: c.itemId,
+                                urunAdi: c.items.urunAdi
+                            };
+                            delete c.items.altKategori;
+                            delete c.items.kategori;
+                            delete c.items.urunItems;
+                            delete c.items.items;
+                            delete c.itemDetails;
+
+                            itemSchema.itemDetails.urunItems.push(c);
+                        }
+                    } else {
+                        delete c.istenmeyen;
+                        c.items = c.itemDetails;
+                        c.items.selected = true;
+                        c.items.ekFiyat = c.ekFiyat;
+                        c.ekFiyat = 0;
+                        c.items.itemId = {
+                            _id: c.itemId,
+                            urunAdi: c.items.urunAdi
+                        };
+                        delete c.items.altKategori;
+                        delete c.items.kategori;
+                        delete c.items.urunItems;
+                        delete c.items.items;
+                        delete c.itemDetails;
+                        // childType=PRODUCT => yine alt ürün
+
+                        itemSchema.itemDetails.urunItems.push(c);
+                    }
+                }
+            }
+        }
+    } else {
+        if (isIstemiyorum) {
+            // => "çıkarma"
+            itemSchema.istenmeyen = true;
+            itemSchema.selected = true;
+        }
+        // alt children
+        if (Array.isArray(topping.children)) {
+            console.log('topping.children', topping.children);
+            for (const child of topping.children) {
+                const c = OrderService.parseSingleAggregatorTopping(child);
+                if (c) {
+                    const cType = (child.type || '').toUpperCase();
+                    const cName = (child.name || '').toLowerCase();
+                    const cIsIstemiyorum = cName.includes('istemiyorum');
+
+                    if (cType === 'EXTRA') {
+                        // eğer "İstemiyorum" => itemSchema.itemDetails.items, aksi => itemSchema.itemDetails.urunItems
+                        if (cIsIstemiyorum) {
+                            c.istenmeyen = true;
+                            itemSchema.itemDetails.items.push(c);
+                        } else {
+                            c.items = c.itemDetails;
+                            c.items.tip = c.tip;
+                            c.items.selected = true;
+                            c.items.ekFiyat = c.ekFiyat;
+                            c.ekFiyat = 0;
+                            c.items.itemId = {
+                                _id: c.itemId,
+                                urunAdi: c.items.urunAdi
+                            };
+                            delete c.items.altKategori;
+                            delete c.items.kategori;
+                            delete c.items.urunItems;
+                            delete c.items.items;
+                            delete c.itemDetails;
+
+                            itemSchema.itemDetails.urunItems.push(c);
+                        }
+                    } else {
+                        c.items = c.itemDetails;
+                        c.items.tip = c.tip;
+                        c.items.selected = true;
+                        c.items.ekFiyat = c.ekFiyat;
+                        c.ekFiyat = 0;
+                        c.items.itemId = {
+                            _id: c.itemId,
+                            urunAdi: c.items.urunAdi
+                        };
+                        delete c.items.altKategori;
+                        delete c.items.kategori;
+                        delete c.items.urunItems;
+                        delete c.items.items;
+                        delete c.itemDetails;
+                        // cType=PRODUCT => alt ürün
+
+                        itemSchema.itemDetails.urunItems.push(c);
+                    }
+                }
+            }
+        }
+    }
+
+    return itemSchema;
+  }
+
+  // Ana Angular projeden: mapYemeksepetiToppingsToItems
+  static mapYemeksepetiToppingsToItems(toppings: any[]): any[] {
+    if (!Array.isArray(toppings)) return [];
+
+    const result: any[] = [];
+
+    for (const topping of toppings) {
+        const item = OrderService.parseSingleAggregatorTopping(topping);
+        if (item) {
+            result.push(item);
+        }
+    }
+    return result;
+  }
+
+  // Ana Angular projeden: mapGetirOptionsToItems
+  static mapGetirOptionsToItems(options: any[]): any[] {
+    if (!Array.isArray(options)) return [];
+
+    const result: any[] = [];
+
+    options.forEach((category: any) => {
+        if (!Array.isArray(category.options)) return;
+
+        category.options.forEach((opt: any) => {
+            const localProd = opt.mapping?.localProduct;
+            if (!localProd) {
+                console.warn('Getir option eşleşme yok:', opt.name?.tr || opt.name?.en);
+                return;
+            }
+
+            const type = opt.mapping?.localProductType || 'Recipe';
+            const ekFiyat = parseFloat(opt.price || '0');
+
+            // Ana ürün için item oluştur
+            const optionItem = {
+                tip: type,
+                itemId: localProd._id,
+                miktar: 1,
+                birim: 'adet',
+                ekFiyat,
+                selected: true,
+                istenmeyen: false,
+                items: [] as any[],
+                itemDetails: {
+                    urunAdi: localProd.urunAdi || opt.name?.tr || opt.name?.en,
+                    kategori: {},
+                    altKategori: {},
+                    items: [] as any[],
+                    urunItems: [] as any[]
+                }
+            };
+
+            // Alt kategorileri kontrol et (soslar ve çıkarılacak malzemeler)
+            if (opt.optionCategories && opt.optionCategories.length > 0) {
+                opt.optionCategories.forEach((category: any) => {
+                    const categoryName = category.name?.tr || category.name?.en || '';
+                    const isUnwanted = categoryName.toLowerCase().includes('çıkarılacak') || categoryName.toLowerCase().includes('remove');
+
+                    if (category.options && category.options.length > 0) {
+                        category.options.forEach((subOption: any) => {
+                            const subOptionName = subOption.name?.tr || subOption.name?.en || '';
+
+                            // Eğer alt seçenek için eşleştirme varsa onu kullan, yoksa Getir ID'sini kullan
+                            const subLocalProd = subOption.mapping?.localProduct;
+                            const subLocalType = subOption.mapping?.localProductType || 'Recipe';
+                            const subItemId = subLocalProd ? subLocalProd._id : (subOption.product || subOption.chainProduct);
+                            const subProductName = subLocalProd ? subLocalProd.urunAdi : subOptionName;
+
+                            if (isUnwanted) {
+                                // Çıkarılacak malzemeler için geleneksel yapı
+                                const unwantedItem = {
+                                    tip: subLocalType,
+                                    itemId: subItemId,
+                                    miktar: 1,
+                                    birim: 'adet',
+                                    ekFiyat: 0,
+                                    selected: true,
+                                    istenmeyen: true,
+                                    itemDetails: {
+                                        urunAdi: subProductName,
+                                        kategori: {},
+                                        altKategori: {},
+                                        items: [],
+                                        urunItems: []
+                                    }
+                                };
+                                optionItem.itemDetails.items.push(unwantedItem);
+                            } else {
+                                // Normal customer seçimi için basit yapı (domates gibi)
+                                const customerChoiceItem = {
+                                    miktar: 1,
+                                    birim: 'adet',
+                                    ekFiyat: 0,
+                                    items: [
+                                        {
+                                            tip: subLocalType,
+                                            itemId: subLocalProd ? {
+                                                _id: subItemId,
+                                                urunAdi: subProductName
+                                            } : subItemId,
+                                            miktar: 1,
+                                            birim: 'adet',
+                                            ekFiyat: 0,
+                                            selected: true
+                                        }
+                                    ]
+                                };
+
+                                // Ana ürünün urunItems'ına customer seçimini ekle
+                                optionItem.itemDetails.urunItems.push(customerChoiceItem);
+                            }
+                        });
+                    }
+                });
+            }
+
+            result.push(optionItem);
+        });
+    });
+
+    return result;
+  }
+
+  // Ana Angular projeden: mapMigrosOptionsToItems
+  static mapMigrosOptionsToItems(options: any[]): any[] {
+    if (!Array.isArray(options) || options.length === 0) return [];
+
+    const result = [];
+
+    for (const option of options) {
+        // Mapping bilgisi kontrolü
+        if (!option.mapping?.localProduct) continue;
+
+        // Ürünün local bilgilerini al
+        const localProd = option.mapping.localProduct;
+        const localType = option.mapping.localProductType || 'Urun';
+
+        // Option ana öğesi için item oluştur
+        const optionItem = {
+            tip: localType,
+            itemId: localProd._id,
+            miktar: 1,
+            birim: 'adet',
+            ekFiyat: 0,
+            selected: true,
+            istenmeyen: false,
+            itemDetails: {
+                urunAdi: localProd.urunAdi || option.itemNames,
+                kategori: {},
+                altKategori: {},
+                items: [] as any[],
+                urunItems: [] as any[]
+            }
+        };
+
+        // subOptions varsa işle
+        if (Array.isArray(option.subOptions) && option.subOptions.length > 0) {
+            for (const subOption of option.subOptions) {
+                // Mapping bilgisi kontrolü
+                if (!subOption.mapping?.localProduct) continue;
+
+                // Alt ürünün local bilgilerini al
+                const subLocalProd = subOption.mapping.localProduct;
+                const subLocalType = subOption.mapping.localProductType || 'Recipe';
+                const subName = subOption.itemNames || '';
+
+                // String'i normalize et
+                const normalizedText = subName.toString().toLowerCase()
+                    .replace(/i̇/g, 'i')
+                    .replace(/ı/g, 'i')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '');
+
+                const hasEkstra = normalizedText.includes("ekstra");
+                const hasIstemiyorum = normalizedText.includes("istemiyorum");
+
+                // ÖNEMLİ MANTIK: "Ekstra" + "İstemiyorum" kombinasyonu olan seçenekleri items'a ekleme
+                if (hasEkstra && hasIstemiyorum) {
+                    // "Ekstra Peynir İstemiyorum" gibi seçenekleri atla
+                    // Çünkü müşteri ekstra bir şey istemiyor, eşleştirmeye gerek yok
+                    continue;
+                }
+
+                // Normal istenmeyen kontrolü (sadece "İstemiyorum" içerenler veya INGREDIENT tipi)
+                const isIngredient = subOption.optionType === 'INGREDIENT';
+                const isUnwanted = (hasIstemiyorum && !hasEkstra) || isIngredient;
+
+                // SubOption için item oluştur
+                const subItem = {
+                    tip: subLocalType,
+                    itemId: subLocalProd._id,
+                    miktar: 1,
+                    birim: 'adet',
+                    ekFiyat: 0,
+                    selected: true,
+                    istenmeyen: isUnwanted,
+                    itemDetails: {
+                        urunAdi: subLocalProd.urunAdi || subOption.itemNames,
+                        kategori: {},
+                        altKategori: {},
+                        items: [],
+                        urunItems: []
+                    }
+                };
+
+                // İstenmeyen öğe ise items'a, normal öğe ise urunItems'a ekle
+                if (isUnwanted) {
+                    optionItem.itemDetails.items.push(subItem);
+                } else {
+                    // Migros fiyatı kuruş cinsinden geliyor, TL'ye çeviriyoruz
+                    const migrosPrice = parseFloat(subOption.primaryDiscountedPrice || subOption.primaryPrice || '0');
+                    const priceInTL = migrosPrice / 100; // 480 kuruş = 4.8 TL
+
+                    // Normal customer seçimi için Getir tarzı basit yapı
+                    const customerChoiceItem = {
+                        miktar: 1,
+                        birim: 'adet',
+                        ekFiyat: 0,
+                        items: [
+                            {
+                                tip: subLocalType,
+                                itemId: {
+                                    _id: subLocalProd._id,
+                                    urunAdi: subLocalProd.urunAdi
+                                },
+                                miktar: 1,
+                                birim: 'adet',
+                                ekFiyat: 0,
+                                selected: true
+                            }
+                        ]
+                    };
+
+                    // Ana ürünün urunItems'ına customer seçimini ekle
+                    optionItem.itemDetails.urunItems.push(customerChoiceItem);
+                }
+            }
+        }
+
+        // Ana option öğesini sonuç dizisine ekle
+        result.push(optionItem);
+    }
+
+    return result;
   }
 }

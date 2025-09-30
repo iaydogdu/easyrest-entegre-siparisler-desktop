@@ -454,8 +454,8 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
                 }
               }, 500); // 500ms sonra yazdırma (daha hızlı)
               
-              // 6. API rate limiting için bekle
-              await new Promise(resolve => setTimeout(resolve, 1500));
+              // 6. API rate limiting için bekle (HIZLI)
+              await new Promise(resolve => setTimeout(resolve, 1000));
             } else {
               console.error(`❌ Otomatik onay başarısız: ${orderId}`);
             }
@@ -472,10 +472,10 @@ const Orders: React.FC<OrdersProps> = ({ onLogout }) => {
         }, 3000);
       };
       
-      // 5 saniye bekle, sonra otomatik onay başlat
+      // 2 saniye bekle, sonra otomatik onay başlat (HIZLI)
       setTimeout(() => {
         approveOrders();
-      }, 5000);
+      }, 2000);
     }
   }, [filteredOrders, autoApproveEnabled, isAutoApproving, approvedOrders]);
 
